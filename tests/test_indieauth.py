@@ -52,3 +52,43 @@ async def test_auth_fails(httpx_mock):
         # Should return error
         assert response.status_code == 403
         assert "An error of some sort" in response.text
+
+
+@pytest.mark.asyncio
+async def test_restrict_access(httpx_mock):
+    httpx_mock.add_response(
+        url="https://indieauth.com/auth", data=b"me=https://simonwillison.net/"
+    )
+    datasette = Datasette(
+        [],
+        memory=True,
+        metadata={
+            "plugins": {
+                "datasette-indieauth": {"restrict_access": "https://simonwillison.net/"}
+            }
+        },
+    )
+    app = datasette.app()
+    paths = ("/", "/:memory:", "/-/metadata")
+    async with httpx.AsyncClient(app=app) as client:
+        # All pages should 403 and show login form
+        for path in paths:
+            response = await client.get("http://localhost{}".format(path))
+            assert response.status_code == 403
+            assert '<form action="https://indieauth.com/auth"' in response.text
+            assert "https://simonwillison.net/" not in response.text
+
+        # Now do the login and try again
+        response2 = await client.get(
+            "http://localhost/-/indieauth?code=code&me=example.com",
+            allow_redirects=False,
+        )
+        assert response2.status_code == 302
+        ds_actor = response2.cookies["ds_actor"]
+        # Everything should 200 now
+        for path in paths:
+            response = await client.get(
+                "http://localhost{}".format(path), cookies={"ds_actor": ds_actor}
+            )
+            assert response.status_code == 200
+            assert "https://simonwillison.net/" in response.text
