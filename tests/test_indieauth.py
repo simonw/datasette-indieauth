@@ -37,7 +37,11 @@ async def test_auth_succeeds(httpx_mock):
 
 @pytest.mark.asyncio
 async def test_auth_fails(httpx_mock):
-    httpx_mock.add_response(url="https://indieauth.com/auth", status_code=404)
+    httpx_mock.add_response(
+        url="https://indieauth.com/auth",
+        status_code=404,
+        data=b"error_description=An+error+of+some+sort",
+    )
     datasette = Datasette([], memory=True)
     app = datasette.app()
     async with httpx.AsyncClient(app=app) as client:
@@ -47,3 +51,4 @@ async def test_auth_fails(httpx_mock):
         )
         # Should return error
         assert response.status_code == 403
+        assert "An error of some sort" in response.text

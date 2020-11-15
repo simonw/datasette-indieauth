@@ -8,6 +8,9 @@ async def indieauth(request, datasette):
     client_id = datasette.absolute_url(request, datasette.urls.instance())
     redirect_uri = datasette.absolute_url(request, request.path)
 
+    error = None
+    status = 200
+
     if request.args.get("code") and request.args.get("me"):
         ok, extra = await verify_code(request.args["code"], client_id, redirect_uri)
         if ok:
@@ -26,7 +29,8 @@ async def indieauth(request, datasette):
             )
             return response
         else:
-            return Response.text(extra, status=403)
+            error = extra
+            status = 403
 
     return Response.html(
         await datasette.render_template(
@@ -34,9 +38,11 @@ async def indieauth(request, datasette):
             {
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
+                "error": error,
             },
             request=request,
-        )
+        ),
+        status=status,
     )
 
 
@@ -58,7 +64,10 @@ async def verify_code(code, client_id, redirect_uri):
             else:
                 return False, "Server did not return me="
         else:
-            return False, "{}: {}".format(response.status_code, response.text)
+            bits = dict(urllib.parse.parse_qsl(response.text))
+            return False, bits.get("error_description") or "{} error".format(
+                response.status_code
+            )
 
 
 @hookimpl

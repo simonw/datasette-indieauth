@@ -4,6 +4,8 @@
 
 {% block content %}
 <h1>Sign in with IndieAuth</h1>
+
+{% if error %}<p class="message-error">{{ error }}</p>{% endif %}
 <form action="https://indieauth.com/auth" method="get">
     <p><input type="text" name="me">
         <input type="hidden" name="client_id" value="{{ client_id }}">
