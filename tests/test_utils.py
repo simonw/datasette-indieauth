@@ -102,7 +102,7 @@ def test_canonicalize_url(url, expected):
             ],
         ),
         (
-            # Incomplete elements should not be returend
+            # Incomplete elements should not be returned
             """
     <title>Aaron Parecki</title>
       <link rel="authorization_endpoint" href="https://aaronparecki.com/auth">
@@ -118,3 +118,55 @@ def test_canonicalize_url(url, expected):
 )
 def test_parse_link_rels(html, expected):
     assert utils.parse_link_rels(html) == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body,headers,expected",
+    [
+        # Link: rel=authorization_endpoint
+        (
+            "",
+            [("link", '<https://aaronparecki.com/auth>; rel="authorization_endpoint"')],
+            ("https://aaronparecki.com/auth", None),
+        ),
+        # Link: rel=authorization_endpoint and rel=token_endpoint
+        (
+            "",
+            [
+                (
+                    "link",
+                    '<https://aaronparecki.com/auth>; rel="authorization_endpoint"',
+                ),
+                ("link", '<https://aaronparecki.com/token>; rel="token_endpoint"'),
+            ],
+            ("https://aaronparecki.com/auth", "https://aaronparecki.com/token"),
+        ),
+        # HTML with those things in it
+        (
+            """
+            <link rel="authorization_endpoint" href="https://aaronparecki.com/auth">
+            <link rel="token_endpoint" href="https://aaronparecki.com/token">
+            """,
+            [],
+            ("https://aaronparecki.com/auth", "https://aaronparecki.com/token"),
+        ),
+        # If headers has it, HTML is ignored
+        (
+            '<link rel="authorization_endpoint" href="https://aaronparecki.com/auth2">',
+            [
+                (
+                    "link",
+                    '<https://aaronparecki.com/auth>; rel="authorization_endpoint"',
+                )
+            ],
+            ("https://aaronparecki.com/auth", None),
+        ),
+    ],
+)
+async def test_discover_endpoints(httpx_mock, body, headers, expected):
+    httpx_mock.add_response(
+        url="https://example.com", data=[body.encode("utf-8")], headers=headers
+    )
+    actual = await utils.discover_endpoints("https://example.com/")
+    assert actual == expected

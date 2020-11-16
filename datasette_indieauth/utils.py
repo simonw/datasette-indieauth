@@ -1,4 +1,5 @@
 from html.parser import HTMLParser
+import httpx
 import ipaddress
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
@@ -100,3 +101,34 @@ def parse_link_rels(html):
     parser = LinkRelParser()
     parser.feed(html)
     return parser.link_rels
+
+
+async def discover_endpoints(url):
+    authorization_endpoint = None
+    token_endpoint = None
+    async with httpx.AsyncClient() as client:
+        async with client.stream("GET", url) as response:
+            # Check response.links first
+            if "authorization_endpoint" in response.links and response.links[
+                "authorization_endpoint"
+            ].get("url"):
+                authorization_endpoint = response.links["authorization_endpoint"]["url"]
+            if "token_endpoint" in response.links and response.links[
+                "token_endpoint"
+            ].get("url"):
+                token_endpoint = response.links["token_endpoint"]["url"]
+            if authorization_endpoint and token_endpoint:
+                # No need to consume any HTML at all
+                return authorization_endpoint, token_endpoint
+            # Just pull the first chunk - chunks are 64KB
+            chunk = next(response.iter_text())
+    rels = parse_link_rels(chunk)
+    if authorization_endpoint is None:
+        matches = [r["href"] for r in rels if r["rel"] == "authorization_endpoint"]
+        if matches:
+            authorization_endpoint = matches[0]
+    if token_endpoint is None:
+        matches = [r["href"] for r in rels if r["rel"] == "token_endpoint"]
+        if matches:
+            token_endpoint = matches[0]
+    return authorization_endpoint, token_endpoint
