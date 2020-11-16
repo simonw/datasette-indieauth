@@ -67,6 +67,7 @@ def test_verify_client_identifier_invalid(url):
     [
         ("example.com", "http://example.com/"),
         ("http://Example.com", "http://example.com/"),
+        ("https://simonwillison.net/", "https://simonwillison.net/"),
     ],
 )
 def test_canonicalize_url(url, expected):
