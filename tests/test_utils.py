@@ -72,3 +72,49 @@ def test_verify_client_identifier_invalid(url):
 )
 def test_canonicalize_url(url, expected):
     assert utils.canonicalize_url(url) == expected
+
+
+@pytest.mark.parametrize(
+    "html,expected",
+    [
+        (
+            """
+    <!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aaron Parecki</title>
+      <link rel="authorization_endpoint" href="https://aaronparecki.com/auth">
+  <link rel="token_endpoint" href="https://aaronparecki.com/auth/token">
+  <link rel="micropub" href="https://aaronparecki.com/micropub">
+    """,
+            [
+                {
+                    "rel": "authorization_endpoint",
+                    "href": "https://aaronparecki.com/auth",
+                },
+                {
+                    "rel": "token_endpoint",
+                    "href": "https://aaronparecki.com/auth/token",
+                },
+                {"rel": "micropub", "href": "https://aaronparecki.com/micropub"},
+            ],
+        ),
+        (
+            # Incomplete elements should not be returend
+            """
+    <title>Aaron Parecki</title>
+      <link rel="authorization_endpoint" href="https://aaronparecki.com/auth">
+  <link rel="token_endpoint" href="https://aaronparecki.""",
+            [
+                {
+                    "rel": "authorization_endpoint",
+                    "href": "https://aaronparecki.com/auth",
+                }
+            ],
+        ),
+    ],
+)
+def test_parse_link_rels(html, expected):
+    assert utils.parse_link_rels(html) == expected

@@ -1,5 +1,6 @@
-from urllib.parse import urlparse, urlsplit, urlunsplit
+from html.parser import HTMLParser
 import ipaddress
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 
 def verify_profile_url(url):
@@ -82,3 +83,26 @@ def canonicalize_url(url):
     if not path:
         path = "/"
     return urlunsplit((scheme, netloc, path, query, fragment))
+
+
+class LinkRelParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.link_rels = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "link" and "rel" in attrs:
+            self.link_rels.append(attrs)
+
+    def handle_endtag(self, tag):
+        pass
+
+    def handle_data(self, data):
+        pass
+
+
+def parse_link_rels(html):
+    parser = LinkRelParser()
+    parser.feed(html)
+    return parser.link_rels
