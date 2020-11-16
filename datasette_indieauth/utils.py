@@ -1,4 +1,4 @@
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
 import ipaddress
 
 
@@ -63,3 +63,22 @@ def verify_client_identifier(url):
     except ValueError:
         pass
     return True
+
+
+def canonicalize_url(url):
+    # For ease of use, clients MAY allow users to enter just a hostname
+    # part of the URL, in which case the client MUST turn that into a
+    # valid URL before beginning the IndieAuth flow, by prepending either
+    # an http or https scheme and appending the path /
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "http://" + url
+    scheme, netloc, path, query, fragment = urlsplit(url)
+    # Since domain names are case insensitive, the hostname component of the URL
+    # MUST be compared case insensitively. Implementations SHOULD convert the
+    # hostname to lowercase when storing and using URLs.
+    netloc = netloc.lower()
+    # If a URL with no path component is ever encountered, it MUST be
+    # treated as if it had the path /.
+    if not path:
+        path = "/"
+    return urlunsplit((scheme, netloc, path, query, fragment))

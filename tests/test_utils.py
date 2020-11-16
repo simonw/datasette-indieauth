@@ -60,3 +60,14 @@ def test_verify_client_identifier_valid(url):
 )
 def test_verify_client_identifier_invalid(url):
     assert not utils.verify_client_identifier(url)
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("example.com", "http://example.com/"),
+        ("http://Example.com", "http://example.com/"),
+    ],
+)
+def test_canonicalize_url(url, expected):
+    assert utils.canonicalize_url(url) == expected
