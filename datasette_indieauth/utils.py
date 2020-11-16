@@ -95,12 +95,6 @@ class LinkRelParser(HTMLParser):
         if tag == "link" and "rel" in attrs:
             self.link_rels.append(attrs)
 
-    def handle_endtag(self, tag):
-        pass
-
-    def handle_data(self, data):
-        pass
-
 
 def parse_link_rels(html):
     parser = LinkRelParser()
