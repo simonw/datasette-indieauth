@@ -1,5 +1,4 @@
 from datasette import hookimpl
-from datasette.utils.asgi import Response
 import httpx
 import urllib
 
@@ -9,6 +8,8 @@ async def indieauth(request, datasette):
 
 
 async def indieauth_page(request, datasette, initial_status=200):
+    from datasette.utils.asgi import Response
+
     client_id = datasette.absolute_url(request, datasette.urls.instance())
     redirect_uri = datasette.absolute_url(request, request.path)
 
