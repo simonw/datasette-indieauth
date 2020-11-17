@@ -6,11 +6,14 @@
 <h1>Sign in with IndieAuth</h1>
 
 {% if error %}<p class="message-error">{{ error }}</p>{% endif %}
-<form action="https://indieauth.com/auth" method="get">
+
+<form action="{{ urls.path("/-/indieauth") }}" method="post">
     <p><input type="text" name="me">
-        <input type="hidden" name="client_id" value="{{ client_id }}">
-        <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+        <input type="hidden" name="csrftoken" value="{{ csrftoken() }}">
         <input type="submit" value="Login">
     </p>
 </form>
+
+<p>More about <a href="https://indieauth.net/">IndieAuth</a>.</p>
+
 {% endblock %}

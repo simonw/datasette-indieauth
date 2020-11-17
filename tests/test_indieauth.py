@@ -19,7 +19,7 @@ async def test_plugin_is_installed():
 
 
 @pytest.mark.asyncio
-async def test_auth_succeeds(httpx_mock):
+async def test_indieauth_com_succeeds(httpx_mock):
     httpx_mock.add_response(
         url="https://indieauth.com/auth", data=b"me=https://simonwillison.net/"
     )
@@ -27,7 +27,7 @@ async def test_auth_succeeds(httpx_mock):
     app = datasette.app()
     async with httpx.AsyncClient(app=app) as client:
         response = await client.get(
-            "http://localhost/-/indieauth?code=code&me=https://simonwillison.net/",
+            "http://localhost/-/indieauth/indieauth-com-done?code=code&me=https://simonwillison.net/",
             allow_redirects=False,
         )
         # Should set a cookie
@@ -38,7 +38,7 @@ async def test_auth_succeeds(httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_auth_fails(httpx_mock):
+async def test_indieauth_com_fails(httpx_mock):
     httpx_mock.add_response(
         url="https://indieauth.com/auth",
         status_code=404,
@@ -48,7 +48,7 @@ async def test_auth_fails(httpx_mock):
     app = datasette.app()
     async with httpx.AsyncClient(app=app) as client:
         response = await client.get(
-            "http://localhost/-/indieauth?code=code&me=example.com",
+            "http://localhost/-/indieauth/indieauth-com-done?code=code&me=example.com",
             allow_redirects=False,
         )
         # Should return error
@@ -77,12 +77,12 @@ async def test_restrict_access(httpx_mock):
         for path in paths:
             response = await client.get("http://localhost{}".format(path))
             assert response.status_code == 403
-            assert '<form action="https://indieauth.com/auth"' in response.text
+            assert '<form action="/-/indieauth" method="post">' in response.text
             assert "simonwillison.net" not in response.text
 
         # Now do the login and try again
         response2 = await client.get(
-            "http://localhost/-/indieauth?code=code&me=example.com",
+            "http://localhost/-/indieauth/indieauth-com-done?code=code&me=example.com",
             allow_redirects=False,
         )
         assert response2.status_code == 302

@@ -109,22 +109,21 @@ def parse_link_rels(html):
 async def discover_endpoints(url):
     authorization_endpoint = None
     token_endpoint = None
+    chunk = None
     async with httpx.AsyncClient() as client:
-        async with client.stream("GET", url) as response:
-            # Check response.links first
-            if "authorization_endpoint" in response.links and response.links[
-                "authorization_endpoint"
-            ].get("url"):
-                authorization_endpoint = response.links["authorization_endpoint"]["url"]
-            if "token_endpoint" in response.links and response.links[
-                "token_endpoint"
-            ].get("url"):
-                token_endpoint = response.links["token_endpoint"]["url"]
-            if authorization_endpoint and token_endpoint:
-                # No need to consume any HTML at all
-                return authorization_endpoint, token_endpoint
-            # Just pull the first chunk - chunks are 64KB
-            chunk = next(response.iter_text())
+        response = await client.get(url)
+        # Check response.links first
+        if "authorization_endpoint" in response.links and response.links[
+            "authorization_endpoint"
+        ].get("url"):
+            authorization_endpoint = response.links["authorization_endpoint"]["url"]
+        if "token_endpoint" in response.links and response.links["token_endpoint"].get(
+            "url"
+        ):
+            token_endpoint = response.links["token_endpoint"]["url"]
+        if authorization_endpoint and token_endpoint:
+            return authorization_endpoint, token_endpoint
+        chunk = response.text
     rels = parse_link_rels(chunk)
     if authorization_endpoint is None:
         matches = [r["href"] for r in rels if r["rel"] == "authorization_endpoint"]
@@ -152,9 +151,7 @@ def challenge_verifier_pair(length=64):
     assert 43 <= length <= 128
     verifier = secrets.token_hex(length // 2)
     # challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
-    challenge = encode_challenge(
-        hashlib.sha256(verifier.encode("ascii")).digest()
-    )
+    challenge = encode_challenge(hashlib.sha256(verifier.encode("ascii")).digest())
     return challenge, verifier
 
 
@@ -174,12 +171,17 @@ def build_authorization_url(
     client_id,
     redirect_uri,
     me,
+    signing_function,
     scope=None,
     verifier_length=64
 ):
     "Returns (URL, state, verifier)"
     challenge, verifier = challenge_verifier_pair(verifier_length)
-    state = secrets.token_hex(16)
+    state = signing_function(
+        {
+            "a": authorization_endpoint,
+        }
+    )
     args = {
         "response_type": "code",
         "client_id": client_id,

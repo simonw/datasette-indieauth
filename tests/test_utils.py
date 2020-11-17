@@ -3,6 +3,7 @@ import hashlib
 import pytest
 from urllib.parse import parse_qsl
 from datasette_indieauth import utils
+from datasette.app import Datasette
 
 
 @pytest.mark.parametrize(
@@ -169,7 +170,7 @@ def test_parse_link_rels(html, expected):
 )
 async def test_discover_endpoints(httpx_mock, body, headers, expected):
     httpx_mock.add_response(
-        url="https://example.com", data=[body.encode("utf-8")], headers=headers
+        url="https://example.com", data=body.encode("utf-8"), headers=headers
     )
     actual = await utils.discover_endpoints("https://example.com/")
     assert actual == expected
@@ -194,12 +195,14 @@ def test_challenge_verifier_pair():
 
 
 def test_build_authorization_url():
+    datasette = Datasette([], memory=True)
     url, state, verifier = utils.build_authorization_url(
         authorization_endpoint="https://example.com/auth",
         client_id="https://simonwillison.net/login",
         redirect_uri="https://simonwillison.net/login/auth",
         me="https://simonwillison.net/",
         scope="blah",
+        signing_function=datasette.sign,
     )
     assert url.split("?")[0] == "https://example.com/auth"
     bits = dict(parse_qsl(url.split("?")[1]))
@@ -207,10 +210,9 @@ def test_build_authorization_url():
     assert bits["client_id"] == "https://simonwillison.net/login"
     assert bits["redirect_uri"] == "https://simonwillison.net/login/auth"
     assert bits["me"] == "https://simonwillison.net/"
-    assert len(bits["state"]) == 32
     assert bits["state"] == state
     assert bits["scope"] == "blah"
     assert bits["code_challenge_method"] == "S256"
-    assert hashlib.sha256(
-        verifier.encode("utf-8")
-    ).digest() == utils.decode_challenge(bits["code_challenge"])
+    assert hashlib.sha256(verifier.encode("utf-8")).digest() == utils.decode_challenge(
+        bits["code_challenge"]
+    )
