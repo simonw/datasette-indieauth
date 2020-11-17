@@ -189,7 +189,7 @@ def test_display_url(url, expected):
 
 def test_challenge_verifier_pair():
     challenge, verifier = utils.challenge_verifier_pair()
-    hash = base64.urlsafe_b64decode(challenge)
+    hash = utils.decode_challenge(challenge)
     assert hashlib.sha256(verifier.encode("utf-8")).digest() == hash
 
 
@@ -213,4 +213,4 @@ def test_build_authorization_url():
     assert bits["code_challenge_method"] == "S256"
     assert hashlib.sha256(
         verifier.encode("utf-8")
-    ).digest() == base64.urlsafe_b64decode(bits["code_challenge"])
+    ).digest() == utils.decode_challenge(bits["code_challenge"])

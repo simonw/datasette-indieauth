@@ -152,10 +152,20 @@ def challenge_verifier_pair(length=64):
     assert 43 <= length <= 128
     verifier = secrets.token_hex(length // 2)
     # challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
-    challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(verifier.encode("utf-8")).digest()
-    ).decode("utf-8")
+    challenge = encode_challenge(
+        hashlib.sha256(verifier.encode("ascii")).digest()
+    )
     return challenge, verifier
+
+
+def encode_challenge(challenge):
+    return base64.urlsafe_b64encode(challenge).decode("ascii").rstrip("=")
+
+
+def decode_challenge(encoded):
+    padding = 4 - (len(encoded) % 4)
+    encoded = encoded + ("=" * padding)
+    return base64.urlsafe_b64decode(encoded)
 
 
 def build_authorization_url(
