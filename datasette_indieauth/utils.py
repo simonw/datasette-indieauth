@@ -132,3 +132,13 @@ async def discover_endpoints(url):
         if matches:
             token_endpoint = matches[0]
     return authorization_endpoint, token_endpoint
+
+
+def display_url(url):
+    # Strips http:// or https:// and path if path == "/"
+    url = canonicalize_url(url)
+    scheme, netloc, path, query, fragment = urlsplit(url)
+    if path == "/":
+        path = ""
+    url = urlunsplit((scheme, netloc, path, query, fragment))
+    return url.split("://")[1]

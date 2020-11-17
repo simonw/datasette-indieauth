@@ -20,18 +20,20 @@ async def test_plugin_is_installed():
 
 @pytest.mark.asyncio
 async def test_auth_succeeds(httpx_mock):
-    httpx_mock.add_response(url="https://indieauth.com/auth", data=b"me=example.com")
+    httpx_mock.add_response(
+        url="https://indieauth.com/auth", data=b"me=https://simonwillison.net/"
+    )
     datasette = Datasette([], memory=True)
     app = datasette.app()
     async with httpx.AsyncClient(app=app) as client:
         response = await client.get(
-            "http://localhost/-/indieauth?code=code&me=example.com",
+            "http://localhost/-/indieauth?code=code&me=https://simonwillison.net/",
             allow_redirects=False,
         )
         # Should set a cookie
         assert response.status_code == 302
         assert datasette.unsign(response.cookies["ds_actor"], "actor") == {
-            "a": {"me": "example.com", "display": "example.com"}
+            "a": {"me": "https://simonwillison.net/", "display": "simonwillison.net"}
         }
 
 
@@ -76,7 +78,7 @@ async def test_restrict_access(httpx_mock):
             response = await client.get("http://localhost{}".format(path))
             assert response.status_code == 403
             assert '<form action="https://indieauth.com/auth"' in response.text
-            assert "https://simonwillison.net/" not in response.text
+            assert "simonwillison.net" not in response.text
 
         # Now do the login and try again
         response2 = await client.get(
@@ -91,4 +93,4 @@ async def test_restrict_access(httpx_mock):
                 "http://localhost{}".format(path), cookies={"ds_actor": ds_actor}
             )
             assert response.status_code == 200
-            assert "https://simonwillison.net/" in response.text
+            assert "simonwillison.net" in response.text

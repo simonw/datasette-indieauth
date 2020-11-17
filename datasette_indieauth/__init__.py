@@ -1,4 +1,5 @@
 from datasette import hookimpl
+from .utils import display_url
 import httpx
 import urllib
 
@@ -26,7 +27,7 @@ async def indieauth_page(request, datasette, initial_status=200):
                     {
                         "a": {
                             "me": extra,
-                            "display": extra,
+                            "display": display_url(extra),
                         }
                     },
                     "actor",

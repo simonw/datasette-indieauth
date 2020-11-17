@@ -170,3 +170,15 @@ async def test_discover_endpoints(httpx_mock, body, headers, expected):
     )
     actual = await utils.discover_endpoints("https://example.com/")
     assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("example.com", "example.com"),
+        ("http://SimonWillison.net/", "simonwillison.net"),
+        ("https://simonwillison.net/id", "simonwillison.net/id"),
+    ],
+)
+def test_display_url(url, expected):
+    assert utils.display_url(url) == expected

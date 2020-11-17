@@ -26,7 +26,7 @@ When a user signs in using IndieAuth they will be recieve a signed `ds_actor` co
 ```json
 {
     "me": "https://simonwillison.net/",
-    "display": "https://simonwillison.net/"
+    "display": "simonwillison.net"
 }
 ```
 
