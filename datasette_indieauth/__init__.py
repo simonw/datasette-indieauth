@@ -75,6 +75,10 @@ async def indieauth_page(request, datasette, status=200, error=None):
             "indieauth.html",
             {
                 "error": error,
+                "title": datasette.metadata("title") or "Datasette",
+                "absolute_instance_url": datasette.absolute_url(
+                    request, datasette.urls.instance()
+                ),
             },
             request=request,
         ),
@@ -202,7 +206,7 @@ class Urls:
 
     @property
     def client_id(self):
-        return self.absolute(self.datasette.urls.instance())
+        return self.login
 
     @property
     def redirect_uri(self):

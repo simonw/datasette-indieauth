@@ -29,7 +29,9 @@ setup(
     packages=["datasette_indieauth"],
     entry_points={"datasette": ["indieauth = datasette_indieauth"]},
     install_requires=["datasette"],
-    extras_require={"test": ["pytest", "pytest-asyncio", "httpx", "pytest-httpx"]},
+    extras_require={
+        "test": ["pytest", "pytest-asyncio", "httpx", "pytest-httpx", "mf2py"]
+    },
     tests_require=["datasette-indieauth[test]"],
     package_data={"datasette_indieauth": ["templates/*.html"]},
     python_requires=">=3.6",

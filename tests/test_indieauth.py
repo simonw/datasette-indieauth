@@ -1,6 +1,7 @@
 from datasette.app import Datasette
 import pytest
 import httpx
+import mf2py
 
 
 @pytest.fixture
@@ -94,3 +95,24 @@ async def test_restrict_access(httpx_mock):
             )
             assert response.status_code == 200
             assert "simonwillison.net" in response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("title", [None, "This is the title"])
+async def test_h_app(title):
+    metadata = {}
+    if title:
+        metadata["title"] = title
+    datasette = Datasette(
+        [],
+        memory=True,
+        metadata=metadata,
+    )
+    response = await datasette.client.get("/-/indieauth")
+    html = response.text
+    items = mf2py.parse(doc=html)["items"]
+    expected_title = title or "Datasette"
+    assert items[0] == {
+        "type": ["h-app"],
+        "properties": {"name": [expected_title], "url": ["http://localhost/"]},
+    }
