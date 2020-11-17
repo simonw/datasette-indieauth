@@ -159,7 +159,13 @@ def challenge_verifier_pair(length=64):
 
 
 def build_authorization_url(
-    authorization_endpoint, client_id, redirect_uri, me, scope=None, verifier_length=64
+    *,
+    authorization_endpoint,
+    client_id,
+    redirect_uri,
+    me,
+    scope=None,
+    verifier_length=64
 ):
     "Returns (URL, state, verifier)"
     challenge, verifier = challenge_verifier_pair(verifier_length)
