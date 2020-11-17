@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import pytest
+from urllib.parse import parse_qsl
 from datasette_indieauth import utils
 
 
@@ -190,3 +191,26 @@ def test_challenge_verifier_pair():
     challenge, verifier = utils.challenge_verifier_pair()
     hash = base64.urlsafe_b64decode(challenge)
     assert hashlib.sha256(verifier.encode("utf-8")).digest() == hash
+
+
+def test_build_authorization_url():
+    url, state, verifier = utils.build_authorization_url(
+        authorization_endpoint="https://example.com/auth",
+        client_id="https://simonwillison.net/login",
+        redirect_uri="https://simonwillison.net/login/auth",
+        me="https://simonwillison.net/",
+        scope="blah",
+    )
+    assert url.split("?")[0] == "https://example.com/auth"
+    bits = dict(parse_qsl(url.split("?")[1]))
+    assert bits["response_type"] == "code"
+    assert bits["client_id"] == "https://simonwillison.net/login"
+    assert bits["redirect_uri"] == "https://simonwillison.net/login/auth"
+    assert bits["me"] == "https://simonwillison.net/"
+    assert len(bits["state"]) == 32
+    assert bits["state"] == state
+    assert bits["scope"] == "blah"
+    assert bits["code_challenge_method"] == "S256"
+    assert hashlib.sha256(
+        verifier.encode("utf-8")
+    ).digest() == base64.urlsafe_b64decode(bits["code_challenge"])

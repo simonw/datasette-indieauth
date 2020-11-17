@@ -3,7 +3,7 @@ import hashlib
 from html.parser import HTMLParser
 import httpx
 import ipaddress
-from urllib.parse import urlparse, urlsplit, urlunsplit
+from urllib.parse import urlencode, urlparse, urlsplit, urlunsplit
 import secrets
 
 
@@ -156,3 +156,24 @@ def challenge_verifier_pair(length=64):
         hashlib.sha256(verifier.encode("utf-8")).digest()
     ).decode("utf-8")
     return challenge, verifier
+
+
+def build_authorization_url(
+    authorization_endpoint, client_id, redirect_uri, me, scope=None, verifier_length=64
+):
+    "Returns (URL, state, verifier)"
+    challenge, verifier = challenge_verifier_pair(verifier_length)
+    state = secrets.token_hex(16)
+    args = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "me": me,
+    }
+    if scope:
+        args["scope"] = scope
+    url = authorization_endpoint + "?" + urlencode(args)
+    return url, state, verifier
