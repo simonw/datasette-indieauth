@@ -1,7 +1,10 @@
+import base64
+import hashlib
 from html.parser import HTMLParser
 import httpx
 import ipaddress
 from urllib.parse import urlparse, urlsplit, urlunsplit
+import secrets
 
 
 def verify_profile_url(url):
@@ -142,3 +145,14 @@ def display_url(url):
         path = ""
     url = urlunsplit((scheme, netloc, path, query, fragment))
     return url.split("://")[1]
+
+
+def challenge_verifier_pair(length=64):
+    assert length % 2 == 0, "length must be an even number"
+    assert 43 <= length <= 128
+    verifier = secrets.token_hex(length // 2)
+    # challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode("utf-8")).digest()
+    ).decode("utf-8")
+    return challenge, verifier

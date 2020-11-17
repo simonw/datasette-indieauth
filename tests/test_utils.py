@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import pytest
 from datasette_indieauth import utils
 
@@ -182,3 +184,9 @@ async def test_discover_endpoints(httpx_mock, body, headers, expected):
 )
 def test_display_url(url, expected):
     assert utils.display_url(url) == expected
+
+
+def test_challenge_verifier_pair():
+    challenge, verifier = utils.challenge_verifier_pair()
+    hash = base64.urlsafe_b64decode(challenge)
+    assert hashlib.sha256(verifier.encode("utf-8")).digest() == hash
