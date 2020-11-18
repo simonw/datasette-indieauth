@@ -130,7 +130,10 @@ async def test_indieauth_succeeds(httpx_mock):
         url="https://indieauth.simonwillison.net/auth",
         method="POST",
         data=json.dumps(
-            {"me": "https://indieauth.simonwillison.net/index.php/author/simonw/"}
+            {
+                "me": "https://indieauth.simonwillison.net/index.php/author/simonw/",
+                "profile": {"email": "simon@example.net"},
+            }
         ).encode("utf-8"),
     )
     datasette = Datasette([], memory=True)
@@ -191,5 +194,6 @@ async def test_indieauth_succeeds(httpx_mock):
             "a": {
                 "me": "https://indieauth.simonwillison.net/index.php/author/simonw/",
                 "display": "indieauth.simonwillison.net/index.php/author/simonw/",
+                "email": "simon@example.net",
             }
         }

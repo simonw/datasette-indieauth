@@ -142,7 +142,7 @@ async def indieauth_done(request, datasette):
         if "scope" in info:
             actor["indieauth_scope"] = info["scope"]
 
-        if "profile" in info and isinstance(info["profile", dict]):
+        if "profile" in info and isinstance(info["profile"], dict):
             actor.update(info["profile"])
         response = Response.redirect(datasette.urls.instance())
         response.set_cookie(
