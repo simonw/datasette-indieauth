@@ -7,6 +7,10 @@
 
 Datasette authentication using [IndieAuth](https://indieauth.net/) and [RelMeAuth](http://microformats.org/wiki/RelMeAuth).
 
+## Demo
+
+You can try out the latest version of this plugin at [datasette-indieauth-demo.datasette.io](https://datasette-indieauth-demo.datasette.io/-/indieauth)
+
 ## Installation
 
 Install this plugin in the same environment as Datasette.
