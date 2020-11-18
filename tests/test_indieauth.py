@@ -121,7 +121,27 @@ async def test_h_app(title):
 
 
 @pytest.mark.asyncio
-async def test_indieauth_succeeds(httpx_mock):
+@pytest.mark.parametrize(
+    "auth_response_body,expected_profile",
+    (
+        # It can return JSON:
+        (
+            json.dumps(
+                {
+                    "me": "https://indieauth.simonwillison.net/index.php/author/simonw/",
+                    "profile": {"email": "simon@example.net"},
+                }
+            ),
+            {"email": "simon@example.net"},
+        ),
+        # Or it can return form-encoded data:
+        (
+            "me=https%3A%2F%2Findieauth.simonwillison.net%2Findex.php%2Fauthor%2Fsimonw%2F&scope",
+            {},
+        ),
+    ),
+)
+async def test_indieauth_succeeds(httpx_mock, auth_response_body, expected_profile):
     httpx_mock.add_response(
         url="https://indieauth.simonwillison.net",
         data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
@@ -129,12 +149,7 @@ async def test_indieauth_succeeds(httpx_mock):
     httpx_mock.add_response(
         url="https://indieauth.simonwillison.net/auth",
         method="POST",
-        data=json.dumps(
-            {
-                "me": "https://indieauth.simonwillison.net/index.php/author/simonw/",
-                "profile": {"email": "simon@example.net"},
-            }
-        ).encode("utf-8"),
+        data=auth_response_body.encode("utf-8"),
     )
     datasette = Datasette([], memory=True)
     app = datasette.app()
@@ -190,10 +205,11 @@ async def test_indieauth_succeeds(httpx_mock):
         assert response.status_code == 302
         assert response.headers["location"]
         assert "ds_actor" in response.cookies
+        expected_actor = {
+            "me": "https://indieauth.simonwillison.net/index.php/author/simonw/",
+            "display": "indieauth.simonwillison.net/index.php/author/simonw/",
+        }
+        expected_actor.update(expected_profile)
         assert datasette.unsign(response.cookies["ds_actor"], "actor") == {
-            "a": {
-                "me": "https://indieauth.simonwillison.net/index.php/author/simonw/",
-                "display": "indieauth.simonwillison.net/index.php/author/simonw/",
-                "email": "simon@example.net",
-            }
+            "a": expected_actor
         }

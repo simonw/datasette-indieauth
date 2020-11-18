@@ -9,6 +9,7 @@ from .utils import (
 import httpx
 import itsdangerous
 from jinja2 import escape
+import json
 import urllib
 
 DATASETTE_INDIEAUTH_STATE = "datasette-indieauth-state"
@@ -127,7 +128,11 @@ async def indieauth_done(request, datasette):
         response = await client.post(authorization_endpoint, data=data)
 
     if response.status_code == 200:
-        info = response.json()
+        body = response.text
+        try:
+            info = json.loads(body)
+        except ValueError:
+            info = dict(urllib.parse.parse_qsl(body))
         if "me" not in info:
             return await indieauth_page(
                 request,
