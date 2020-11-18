@@ -24,9 +24,15 @@ jobs:
     - name: Install dependencies
       run: |
         pip install -e '.[test]'
+        pip install pytest-cov
     - name: Run tests
       run: |
-        pytest
+        pytest --cov datasette_indieauth
+    - name: Upload coverage to codecov.io (3.9 only)
+      run: bash <(curl -s https://codecov.io/bash)
+      if: always() && matrix['python-version'] == 3.9
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   deploy:
     runs-on: ubuntu-latest
