@@ -60,7 +60,7 @@ async def indieauth_page(request, datasette, status=200, error=None):
             )
             response = Response.redirect(authorization_url)
             response.set_cookie(
-                "datasette_indieauth",
+                "ds_indieauth",
                 datasette.sign(
                     {
                         "v": verifier,
@@ -99,30 +99,28 @@ async def indieauth_done(request, datasette):
         )
     authorization_endpoint = state_bits["a"]
 
-    client_id = datasette.absolute_url(request, datasette.urls.instance())
-    redirect_path = datasette.urls.path("/-/indieauth/done")
-    redirect_uri = datasette.absolute_url(request, redirect_path)
+    urls = Urls(request, datasette)
 
     # code_verifier should be in a signed cookie
     code_verifier = None
-    if "datasette_indieauth" in request.cookies:
+    if "ds_indieauth" in request.cookies:
         try:
             cookie_bits = datasette.unsign(
-                request.cookies["datasette_indieauth"], DATASETTE_INDIEAUTH_COOKIE
+                request.cookies["ds_indieauth"], DATASETTE_INDIEAUTH_COOKIE
             )
             code_verifier = cookie_bits["v"]
         except itsdangerous.BadSignature:
             pass
     if not code_verifier:
         return await indieauth_page(
-            request, datasette, error="Invalid datasette_indieauth cookie"
+            request, datasette, error="Invalid ds_indieauth cookie"
         )
 
     data = {
         "grant_type": "authorization_code",
         "code": code,
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
+        "client_id": urls.client_id,
+        "redirect_uri": urls.redirect_uri,
         "code_verifier": code_verifier,
     }
     async with httpx.AsyncClient() as client:

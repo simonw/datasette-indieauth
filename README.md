@@ -5,9 +5,7 @@
 [![Tests](https://github.com/simonw/datasette-indieauth/workflows/Test/badge.svg)](https://github.com/simonw/datasette-indieauth/actions?query=workflow%3ATest)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/simonw/datasette-indieauth/blob/main/LICENSE)
 
-**Alpha**. Datasette authentication using [IndieAuth](https://indieauth.net/) and [RelMeAuth](http://microformats.org/wiki/RelMeAuth).
-
-This initial version depends on [IndieAuth.com](https://indieauth.com/).
+Datasette authentication using [IndieAuth](https://indieauth.net/) and [RelMeAuth](http://microformats.org/wiki/RelMeAuth).
 
 ## Installation
 

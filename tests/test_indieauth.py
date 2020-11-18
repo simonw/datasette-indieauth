@@ -1,7 +1,9 @@
 from datasette.app import Datasette
+import json
 import pytest
 import httpx
 import mf2py
+import urllib
 
 
 @pytest.fixture
@@ -116,3 +118,78 @@ async def test_h_app(title):
         "type": ["h-app"],
         "properties": {"name": [expected_title], "url": ["http://localhost/"]},
     }
+
+
+@pytest.mark.asyncio
+async def test_indieauth_succeeds(httpx_mock):
+    httpx_mock.add_response(
+        url="https://indieauth.simonwillison.net",
+        data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
+    )
+    httpx_mock.add_response(
+        url="https://indieauth.simonwillison.net/auth",
+        method="POST",
+        data=json.dumps(
+            {"me": "https://indieauth.simonwillison.net/index.php/author/simonw/"}
+        ).encode("utf-8"),
+    )
+    datasette = Datasette([], memory=True)
+    app = datasette.app()
+    async with httpx.AsyncClient(app=app) as client:
+        # Get CSRF token
+        csrftoken = (
+            await client.get(
+                "http://localhost/-/indieauth",
+            )
+        ).cookies["ds_csrftoken"]
+        # Submit the form
+        post_response = await client.post(
+            "http://localhost/-/indieauth",
+            data={"csrftoken": csrftoken, "me": "https://indieauth.simonwillison.net/"},
+            cookies={"ds_csrftoken": csrftoken},
+            allow_redirects=False,
+        )
+        # Should set a cookie and redirect
+        assert post_response.status_code == 302
+        assert "ds_indieauth" in post_response.cookies
+        ds_indieauth = post_response.cookies["ds_indieauth"]
+        verifier = datasette.unsign(ds_indieauth, "datasette-indieauth-cookie")["v"]
+        # Verify the location is in the right shape
+        location = post_response.headers["location"]
+        assert location.startswith("https://indieauth.simonwillison.net/auth?")
+        querystring = location.split("?", 1)[1]
+        bits = dict(urllib.parse.parse_qsl(querystring))
+        assert bits["redirect_uri"] == "http://localhost/-/indieauth/done"
+        assert bits["client_id"] == "http://localhost/-/indieauth"
+        assert bits["me"] == "https://indieauth.simonwillison.net/"
+        # Next step for user is to redirect to that page, login and redirect back
+        # Simulate the redirect-back part
+        response = await client.get(
+            "http://localhost/-/indieauth/done",
+            params={
+                "state": bits["state"],
+                "code": "123",
+            },
+            cookies={"ds_indieauth": ds_indieauth},
+            allow_redirects=False,
+        )
+        # This should have made a POST to https://indieauth.simonwillison.net/auth
+        last_request = httpx_mock.get_requests()[-1]
+        post_bits = dict(urllib.parse.parse_qsl(last_request.read().decode("utf-8")))
+        assert post_bits == {
+            "grant_type": "authorization_code",
+            "code": "123",
+            "client_id": "http://localhost/-/indieauth",
+            "redirect_uri": "http://localhost/-/indieauth/done",
+            "code_verifier": verifier,
+        }
+        # Should set cookie for "https://indieauth.simonwillison.net/index.php/author/simonw/"
+        assert response.status_code == 302
+        assert response.headers["location"]
+        assert "ds_actor" in response.cookies
+        assert datasette.unsign(response.cookies["ds_actor"], "actor") == {
+            "a": {
+                "me": "https://indieauth.simonwillison.net/index.php/author/simonw/",
+                "display": "indieauth.simonwillison.net/index.php/author/simonw/",
+            }
+        }
