@@ -5,7 +5,7 @@
 [![Tests](https://github.com/simonw/datasette-indieauth/workflows/Test/badge.svg)](https://github.com/simonw/datasette-indieauth/actions?query=workflow%3ATest)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/simonw/datasette-indieauth/blob/main/LICENSE)
 
-Datasette authentication using [IndieAuth](https://indieauth.net/) and [RelMeAuth](http://microformats.org/wiki/RelMeAuth).
+Datasette authentication using [IndieAuth](https://indieauth.net/).
 
 ## Demo
 
@@ -19,11 +19,19 @@ Install this plugin in the same environment as Datasette.
 
 ## Usage
 
-Ensure you have a website with a domain that supports IndieAuth or RelMeAuth.
+Ensure you have a website with a domain that supports IndieAuth or RelMeAuth. The easiest way to do that is to add the following HTML to your homepage, linking to your personal GitHub profile:
 
-Visit `/-/indieauth` to begin the sign-in progress.
+```html
+<link href="https://github.com/simonw" rel="me">
+<link rel="authorization_endpoint" href="https://indieauth.com/auth">
+```
+Your GitHub profile needs to link back to your website, to prove that your GitHub account should be a valid identifier for that page.
 
-When a user signs in using IndieAuth they will be recieve a signed `ds_actor` cookie identifying them as an actor that looks like this:
+Now visit `/-/indieauth` on your Datasette instance to begin the sign-in progress.
+
+## Actor
+
+When a user signs in using IndieAuth they will be recieve a signed `ds_actor` cookie identifying them as an [actor](https://docs.datasette.io/en/stable/authentication.html#actors) that looks like this:
 
 ```json
 {
@@ -31,6 +39,8 @@ When a user signs in using IndieAuth they will be recieve a signed `ds_actor` co
     "display": "simonwillison.net"
 }
 ```
+
+If the IndieAuth server returned additional `"profile"` fields those will be merged into the actor. You can visit `/-/actor` on your Datasette instance to see the full actor you are currently signed in as.
 
 ## Restricting access with the restrict_access plugin configuration
 

@@ -32,44 +32,39 @@ async def indieauth_page(request, datasette, status=200, error=None):
             me = canonicalize_url(me)
 
         if not me or not verify_profile_url(me):
-            datasette.add_message(
-                request, "Invalid IndieAuth identifier", message_type=datasette.ERROR
+            return await indieauth_page(
+                request,
+                datasette,
+                error="Invalid IndieAuth identifier",
             )
-            return Response.redirect(urls.login)
 
         # Start the auth process
         authorization_endpoint, token_endpoint = await discover_endpoints(me)
         if not authorization_endpoint:
-            # Redirect to IndieAuth.com as a fallback
-            # TODO: Only do this if rel=me detected
-            # TODO: make this a configurable preference
-            indieauth_url = "https://indieauth.com/auth?" + urllib.parse.urlencode(
+            return await indieauth_page(
+                request,
+                datasette,
+                error="Invalid IndieAuth identifier - no authorization_endpoint found",
+            )
+
+        authorization_url, state, verifier = build_authorization_url(
+            authorization_endpoint=authorization_endpoint,
+            client_id=urls.client_id,
+            redirect_uri=urls.redirect_uri,
+            me=me,
+            signing_function=lambda x: datasette.sign(x, DATASETTE_INDIEAUTH_STATE),
+        )
+        response = Response.redirect(authorization_url)
+        response.set_cookie(
+            "ds_indieauth",
+            datasette.sign(
                 {
-                    "me": me,
-                    "client_id": urls.client_id,
-                    "redirect_uri": urls.indie_auth_com_redirect_uri,
-                }
-            )
-            return Response.redirect(indieauth_url)
-        else:
-            authorization_url, state, verifier = build_authorization_url(
-                authorization_endpoint=authorization_endpoint,
-                client_id=urls.client_id,
-                redirect_uri=urls.redirect_uri,
-                me=me,
-                signing_function=lambda x: datasette.sign(x, DATASETTE_INDIEAUTH_STATE),
-            )
-            response = Response.redirect(authorization_url)
-            response.set_cookie(
-                "ds_indieauth",
-                datasette.sign(
-                    {
-                        "v": verifier,
-                    },
-                    DATASETTE_INDIEAUTH_COOKIE,
-                ),
-            )
-            return response
+                    "v": verifier,
+                },
+                DATASETTE_INDIEAUTH_COOKIE,
+            ),
+        )
+        return response
 
     return Response.html(
         await datasette.render_template(
@@ -166,35 +161,6 @@ async def indieauth_done(request, datasette):
         )
 
 
-async def indieauth_com_done(request, datasette):
-    from datasette.utils.asgi import Response
-
-    urls = Urls(request, datasette)
-
-    if not (request.args.get("code") and request.args.get("me")):
-        return Response.html("?code= and ?me= are required")
-    ok, extra = await verify_indieauth_com_code(
-        request.args["code"], urls.client_id, urls.indie_auth_com_redirect_uri
-    )
-    if ok:
-        response = Response.redirect(datasette.urls.instance())
-        response.set_cookie(
-            "ds_actor",
-            datasette.sign(
-                {
-                    "a": {
-                        "me": extra,
-                        "display": display_url(extra),
-                    }
-                },
-                "actor",
-            ),
-        )
-        return response
-    else:
-        return Response.html(escape(extra), status=403)
-
-
 class Urls:
     def __init__(self, request, datasette):
         self.request = request
@@ -215,41 +181,12 @@ class Urls:
     def redirect_uri(self):
         return self.absolute("/-/indieauth/done")
 
-    @property
-    def indie_auth_com_redirect_uri(self):
-        return self.absolute("/-/indieauth/indieauth-com-done")
-
-
-async def verify_indieauth_com_code(code, client_id, redirect_uri):
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://indieauth.com/auth",
-            data={
-                "code": code,
-                "client_id": client_id,
-                "redirect_uri": redirect_uri,
-            },
-        )
-        if response.status_code == 200:
-            # me=https%3A%2F%2Fsimonwillison.net%2F&scope
-            bits = dict(urllib.parse.parse_qsl(response.text))
-            if "me" in bits:
-                return True, bits["me"]
-            else:
-                return False, "Server did not return me="
-        else:
-            bits = dict(urllib.parse.parse_qsl(response.text))
-            return False, bits.get("error_description") or "{} error".format(
-                response.status_code
-            )
-
 
 @hookimpl
 def register_routes():
     return [
         (r"^/-/indieauth$", indieauth),
         (r"^/-/indieauth/done$", indieauth_done),
-        (r"^/-/indieauth/indieauth-com-done$", indieauth_com_done),
     ]
 
 
