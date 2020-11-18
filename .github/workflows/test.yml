@@ -27,4 +27,20 @@ jobs:
     - name: Run tests
       run: |
         pytest
-
+    - name: Install deploy dependencies
+      run: |
+        pip install datasette datasette-publish-vercel
+    - name: Download fixtures.db
+      run: |-
+        wget https://latest.datasette.io/fixtures.db
+    - name: Deploy demo using Vercel
+      env:
+        NOW_TOKEN: ${{ secrets.NOW_TOKEN }}
+      run: |-
+        datasette publish vercel fixtures.db \
+          --token $NOW_TOKEN \
+          --project datasette-indieauth-demo \
+          --title "datasette-indieauth demo" \
+          --about "simonw/datasette-indieauth" \
+          --about_url "https://github.com/simonw/datasette-indieauth" \
+          --install "https://github.com/simonw/datasette-indieauth/archive/$GITHUB_SHA.zip"
