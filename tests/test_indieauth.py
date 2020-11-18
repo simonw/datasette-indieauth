@@ -213,3 +213,13 @@ async def test_indieauth_succeeds(httpx_mock, auth_response_body, expected_profi
         assert datasette.unsign(response.cookies["ds_actor"], "actor") == {
             "a": expected_actor
         }
+
+
+@pytest.mark.asyncio
+async def test_indieauth_done_no_params_error():
+    datasette = Datasette([], memory=True)
+    app = datasette.app()
+    async with httpx.AsyncClient(app=app) as client:
+        response = await client.get("http://localhost/-/indieauth/done")
+        assert response.status_code == 400
+        assert "Invalid state" in response.text

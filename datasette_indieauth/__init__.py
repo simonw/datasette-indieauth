@@ -90,13 +90,13 @@ async def indieauth_page(request, datasette, status=200, error=None):
 async def indieauth_done(request, datasette):
     from datasette.utils.asgi import Response
 
-    state = request.args.get("state")
+    state = request.args.get("state") or ""
     code = request.args.get("code")
     try:
         state_bits = datasette.unsign(state, DATASETTE_INDIEAUTH_STATE)
     except itsdangerous.BadSignature:
         return await indieauth_page(
-            request, datasette, error="Invalid state returned by authorization server"
+            request, datasette, error="Invalid state", status=400
         )
     authorization_endpoint = state_bits["a"]
 
