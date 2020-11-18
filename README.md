@@ -2,6 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/datasette-indieauth.svg)](https://pypi.org/project/datasette-indieauth/)
 [![Changelog](https://img.shields.io/github/v/release/simonw/datasette-indieauth?include_prereleases&label=changelog)](https://github.com/simonw/datasette-indieauth/releases)
+[![codecov](https://codecov.io/gh/simonw/datasette-indieauth/branch/main/graph/badge.svg)](https://codecov.io/gh/simonw/datasette-indieauth)
 [![Tests](https://github.com/simonw/datasette-indieauth/workflows/Test/badge.svg)](https://github.com/simonw/datasette-indieauth/actions?query=workflow%3ATest)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/simonw/datasette-indieauth/blob/main/LICENSE)
 
