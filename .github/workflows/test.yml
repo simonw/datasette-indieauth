@@ -27,6 +27,18 @@ jobs:
     - name: Run tests
       run: |
         pytest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+    - uses: actions/cache@v2
+      name: Configure pip caching
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-deploy-
+        restore-keys: |
+          ${{ runner.os }}-pip-deploy-
     - name: Install deploy dependencies
       run: |
         pip install datasette datasette-publish-vercel
