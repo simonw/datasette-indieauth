@@ -27,7 +27,7 @@ jobs:
         pip install pytest-cov
     - name: Run tests
       run: |
-        pytest --cov datasette_indieauth
+        pytest --cov datasette_indieauth --cov-fail-under=100
     - name: Upload coverage to codecov.io (3.9 only)
       run: bash <(curl -s https://codecov.io/bash)
       if: always() && matrix['python-version'] == 3.9

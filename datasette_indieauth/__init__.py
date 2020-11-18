@@ -26,45 +26,40 @@ async def indieauth_page(request, datasette, status=200, error=None):
     urls = Urls(request, datasette)
 
     if request.method == "POST":
-        post = await request.post_vars()
-        me = post.get("me")
-        if me:
-            me = canonicalize_url(me)
+        while True:  # So I can use 'break'
+            post = await request.post_vars()
+            me = post.get("me")
+            if me:
+                me = canonicalize_url(me)
 
-        if not me or not verify_profile_url(me):
-            return await indieauth_page(
-                request,
-                datasette,
-                error="Invalid IndieAuth identifier",
+            if not me or not verify_profile_url(me):
+                error = "Invalid IndieAuth identifier"
+                break
+
+            # Start the auth process
+            authorization_endpoint, token_endpoint = await discover_endpoints(me)
+            if not authorization_endpoint:
+                error = "Invalid IndieAuth identifier - no authorization_endpoint found"
+                break
+
+            authorization_url, state, verifier = build_authorization_url(
+                authorization_endpoint=authorization_endpoint,
+                client_id=urls.client_id,
+                redirect_uri=urls.redirect_uri,
+                me=me,
+                signing_function=lambda x: datasette.sign(x, DATASETTE_INDIEAUTH_STATE),
             )
-
-        # Start the auth process
-        authorization_endpoint, token_endpoint = await discover_endpoints(me)
-        if not authorization_endpoint:
-            return await indieauth_page(
-                request,
-                datasette,
-                error="Invalid IndieAuth identifier - no authorization_endpoint found",
+            response = Response.redirect(authorization_url)
+            response.set_cookie(
+                "ds_indieauth",
+                datasette.sign(
+                    {
+                        "v": verifier,
+                    },
+                    DATASETTE_INDIEAUTH_COOKIE,
+                ),
             )
-
-        authorization_url, state, verifier = build_authorization_url(
-            authorization_endpoint=authorization_endpoint,
-            client_id=urls.client_id,
-            redirect_uri=urls.redirect_uri,
-            me=me,
-            signing_function=lambda x: datasette.sign(x, DATASETTE_INDIEAUTH_STATE),
-        )
-        response = Response.redirect(authorization_url)
-        response.set_cookie(
-            "ds_indieauth",
-            datasette.sign(
-                {
-                    "v": verifier,
-                },
-                DATASETTE_INDIEAUTH_COOKIE,
-            ),
-        )
-        return response
+            return response
 
     return Response.html(
         await datasette.render_template(
@@ -157,7 +152,7 @@ async def indieauth_done(request, datasette):
         return await indieauth_page(
             request,
             datasette,
-            error="Invalid authorization_code response from authorization server",
+            error="Invalid response from authorization server",
         )
 
 
