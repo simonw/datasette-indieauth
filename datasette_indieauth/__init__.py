@@ -37,7 +37,11 @@ async def indieauth_page(request, datasette, status=200, error=None):
                 break
 
             # Start the auth process
-            authorization_endpoint, token_endpoint = await discover_endpoints(me)
+            try:
+                authorization_endpoint, token_endpoint = await discover_endpoints(me)
+            except httpx.RequestError as ex:
+                error = "Invalid IndieAuth identifier: {}".format(ex)
+                break
             if not authorization_endpoint:
                 error = "Invalid IndieAuth identifier - no authorization_endpoint found"
                 break

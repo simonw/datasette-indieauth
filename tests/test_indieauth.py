@@ -244,7 +244,7 @@ async def test_indieauth_errors(httpx_mock, me, bodies, expected_error):
             url=url,
             data=body.encode("utf-8"),
         )
-    datasette = Datasette([], memory=True, pdb=True)
+    datasette = Datasette([], memory=True)
     app = datasette.app()
     async with httpx.AsyncClient(app=app) as client:
         csrftoken = (
@@ -266,7 +266,7 @@ async def test_indieauth_errors(httpx_mock, me, bodies, expected_error):
 
 @pytest.mark.asyncio
 async def test_invalid_ds_indieauth_cookie():
-    datasette = Datasette([], memory=True, pdb=True)
+    datasette = Datasette([], memory=True)
     app = datasette.app()
     state = datasette.sign({"a": "auth-url"}, "datasette-indieauth-state")
     async with httpx.AsyncClient(app=app) as client:
@@ -280,3 +280,28 @@ async def test_invalid_ds_indieauth_cookie():
             allow_redirects=False,
         )
     assert '<p class="message-error">Invalid ds_indieauth cookie' in response.text
+
+
+@pytest.mark.asyncio
+async def test_invalid_url(httpx_mock):
+    def raise_timeout(request, ext):
+        raise httpx.ReadTimeout(f"HTTP error occurred", request=request)
+
+    httpx_mock.add_callback(raise_timeout, url="http://invalid")
+
+    datasette = Datasette([], memory=True)
+    app = datasette.app()
+    async with httpx.AsyncClient(app=app) as client:
+        csrftoken = (
+            await client.get(
+                "http://localhost/-/indieauth",
+            )
+        ).cookies["ds_csrftoken"]
+        # Submit the form
+        post_response = await client.post(
+            "http://localhost/-/indieauth",
+            data={"csrftoken": csrftoken, "me": "invalid"},
+            cookies={"ds_csrftoken": csrftoken},
+            allow_redirects=False,
+        )
+    assert "Invalid IndieAuth identifier: HTTP error occurred" in post_response.text
