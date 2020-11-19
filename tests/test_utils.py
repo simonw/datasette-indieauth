@@ -216,3 +216,16 @@ def test_build_authorization_url():
     assert hashlib.sha256(verifier.encode("utf-8")).digest() == utils.decode_challenge(
         bits["code_challenge"]
     )
+
+
+@pytest.mark.parametrize(
+    "url,other_url,expected",
+    [
+        ("https://www.example.com/", "https://www.example.com/", True),
+        ("https://www.example.com/foo", "https://www.example.com/bar", True),
+        ("https://www.example.com/", "https://www.example.org/", False),
+        ("https://foo.example.com/", "https://www.example.com/", False),
+    ],
+)
+def test_verify_same_domain(url, other_url, expected):
+    assert utils.verify_same_domain(url, other_url) is expected

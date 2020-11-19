@@ -5,6 +5,7 @@ from .utils import (
     discover_endpoints,
     display_url,
     verify_profile_url,
+    verify_same_domain,
 )
 import httpx
 import itsdangerous
@@ -59,6 +60,7 @@ async def indieauth_page(request, datasette, status=200, error=None):
                 datasette.sign(
                     {
                         "v": verifier,
+                        "m": me,
                     },
                     DATASETTE_INDIEAUTH_COOKIE,
                 ),
@@ -98,15 +100,17 @@ async def indieauth_done(request, datasette):
 
     # code_verifier should be in a signed cookie
     code_verifier = None
+    original_me = None
     if "ds_indieauth" in request.cookies:
         try:
             cookie_bits = datasette.unsign(
                 request.cookies["ds_indieauth"], DATASETTE_INDIEAUTH_COOKIE
             )
             code_verifier = cookie_bits["v"]
-        except itsdangerous.BadSignature:
+            original_me = cookie_bits["m"]
+        except (itsdangerous.BadSignature, KeyError):
             pass
-    if not code_verifier:
+    if not code_verifier or not original_me:
         return await indieauth_page(
             request, datasette, error="Invalid ds_indieauth cookie"
         )
@@ -134,6 +138,15 @@ async def indieauth_done(request, datasette):
                 error="Invalid authorization_code response from authorization server",
             )
         me = info["me"]
+
+        # Returned me must be on the same domain as original_me
+        if not verify_same_domain(me, original_me):
+            return await indieauth_page(
+                request,
+                datasette,
+                error='"me" value returned by authorization server had a domain that did not match the initial URL',
+            )
+
         actor = {
             "me": me,
             "display": display_url(me),

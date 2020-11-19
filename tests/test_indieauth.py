@@ -125,6 +125,14 @@ async def test_h_app(title):
             None,
             "Invalid authorization_code response from authorization server",
         ),
+        # Security issue: returned me value must wrap original domain
+        (
+            "https://indieauth.simonwillison.net/",
+            200,
+            "me=https%3A%2F%2Findieauth.simonwillison.com%2F&scope=email",
+            None,
+            "&#34;me&#34; value returned by authorization server had a domain that did not match the initial URL",
+        ),
     ),
 )
 async def test_indieauth_flow(
@@ -165,7 +173,9 @@ async def test_indieauth_flow(
         assert post_response.status_code == 302
         assert "ds_indieauth" in post_response.cookies
         ds_indieauth = post_response.cookies["ds_indieauth"]
-        verifier = datasette.unsign(ds_indieauth, "datasette-indieauth-cookie")["v"]
+        ds_indieauth_bits = datasette.unsign(ds_indieauth, "datasette-indieauth-cookie")
+        verifier = ds_indieauth_bits["v"]
+        assert ds_indieauth_bits["m"] == me
         # Verify the location is in the right shape
         location = post_response.headers["location"]
         assert location.startswith("https://indieauth.simonwillison.net/auth?")
@@ -270,10 +280,17 @@ async def test_indieauth_errors(httpx_mock, me, bodies, expected_error):
 
 
 @pytest.mark.asyncio
-async def test_invalid_ds_indieauth_cookie():
+@pytest.mark.parametrize(
+    "bad_cookie", ["this-is-bad", {"v": "blah"}, {"m": "blah"}, {"s": "blah"}]
+)
+async def test_invalid_ds_indieauth_cookie(bad_cookie):
     datasette = Datasette([], memory=True)
     app = datasette.app()
     state = datasette.sign({"a": "auth-url"}, "datasette-indieauth-state")
+    if isinstance(bad_cookie, dict):
+        ds_indieauth = datasette.sign(bad_cookie, "datasette-indieauth-cookie")
+    else:
+        ds_indieauth = bad_cookie
     async with httpx.AsyncClient(app=app) as client:
         response = await client.get(
             "http://localhost/-/indieauth/done",
@@ -281,7 +298,7 @@ async def test_invalid_ds_indieauth_cookie():
                 "state": state,
                 "code": "123",
             },
-            cookies={"ds_indieauth": "this-is-bad"},
+            cookies={"ds_indieauth": ds_indieauth},
             allow_redirects=False,
         )
     assert '<p class="message-error">Invalid ds_indieauth cookie' in response.text

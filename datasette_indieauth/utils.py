@@ -195,3 +195,9 @@ def build_authorization_url(
         args["scope"] = scope
     url = authorization_endpoint + "?" + urlencode(args)
     return url, state, verifier
+
+
+def verify_same_domain(url, other_url):
+    url_bits = urlparse(url)
+    other_url_bits = urlparse(other_url)
+    return url_bits.netloc == other_url_bits.netloc
