@@ -86,10 +86,11 @@ async def test_h_app(title):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "auth_response_status,auth_response_body,expected_profile,expected_error",
+    "me,auth_response_status,auth_response_body,expected_profile,expected_error",
     (
         # It can return JSON:
         (
+            "https://indieauth.simonwillison.net/",
             200,
             json.dumps(
                 {
@@ -103,6 +104,7 @@ async def test_h_app(title):
         ),
         # Or it can return form-encoded data:
         (
+            "https://indieauth.simonwillison.net/",
             200,
             "me=https%3A%2F%2Findieauth.simonwillison.net%2Findex.php%2Fauthor%2Fsimonw%2F&scope=email",
             {},
@@ -110,12 +112,14 @@ async def test_h_app(title):
         ),
         # These are errors
         (
+            "https://indieauth.simonwillison.net/",
             500,
             "error",
             None,
             "Invalid response from authorization server",
         ),
         (
+            "https://indieauth.simonwillison.net/",
             200,
             "me2=no%20me%20here",
             None,
@@ -125,13 +129,14 @@ async def test_h_app(title):
 )
 async def test_indieauth_flow(
     httpx_mock,
+    me,
     auth_response_status,
     auth_response_body,
     expected_profile,
     expected_error,
 ):
     httpx_mock.add_response(
-        url="https://indieauth.simonwillison.net",
+        url=me.rstrip("/"),
         data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
     )
     httpx_mock.add_response(
@@ -152,7 +157,7 @@ async def test_indieauth_flow(
         # Submit the form
         post_response = await client.post(
             "http://localhost/-/indieauth",
-            data={"csrftoken": csrftoken, "me": "https://indieauth.simonwillison.net/"},
+            data={"csrftoken": csrftoken, "me": me},
             cookies={"ds_csrftoken": csrftoken},
             allow_redirects=False,
         )
@@ -168,7 +173,7 @@ async def test_indieauth_flow(
         bits = dict(urllib.parse.parse_qsl(querystring))
         assert bits["redirect_uri"] == "http://localhost/-/indieauth/done"
         assert bits["client_id"] == "http://localhost/-/indieauth"
-        assert bits["me"] == "https://indieauth.simonwillison.net/"
+        assert bits["me"] == me
         # Next step for user is to redirect to that page, login and redirect back
         # Simulate the redirect-back part
         response = await client.get(
