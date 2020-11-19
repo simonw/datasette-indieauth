@@ -39,7 +39,9 @@ async def indieauth_page(request, datasette, status=200, error=None):
 
             # Start the auth process
             try:
-                authorization_endpoint, token_endpoint = await discover_endpoints(me)
+                me, authorization_endpoint, token_endpoint = await discover_endpoints(
+                    me
+                )
             except httpx.RequestError as ex:
                 error = "Invalid IndieAuth identifier: {}".format(ex)
                 break

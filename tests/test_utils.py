@@ -1,4 +1,6 @@
 import base64
+from collections import namedtuple
+from datasette_indieauth.utils import resolve_permanent_redirects
 import hashlib
 import pytest
 from urllib.parse import parse_qsl
@@ -124,56 +126,143 @@ def test_parse_link_rels(html, expected):
     assert utils.parse_link_rels(html) == expected
 
 
+MockRequest = namedtuple("MockRequest", ("status", "url", "body", "headers"))
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "body,headers,expected",
+    "mocks,expected,expected_error",
     [
         # Link: rel=authorization_endpoint
         (
-            "",
-            [("link", '<https://aaronparecki.com/auth>; rel="authorization_endpoint"')],
-            ("https://aaronparecki.com/auth", None),
+            [
+                MockRequest(
+                    status=200,
+                    url="https://aaronparecki.com",
+                    body="",
+                    headers={
+                        "link": '<https://aaronparecki.com/auth>; rel="authorization_endpoint"'
+                    },
+                )
+            ],
+            ("https://aaronparecki.com/", "https://aaronparecki.com/auth", None),
+            None,
         ),
         # Link: rel=authorization_endpoint and rel=token_endpoint
         (
-            "",
             [
-                (
-                    "link",
-                    '<https://aaronparecki.com/auth>; rel="authorization_endpoint"',
+                MockRequest(
+                    status=200,
+                    url="https://aaronparecki.com",
+                    body="link",
+                    headers=[
+                        (
+                            "link",
+                            '<https://aaronparecki.com/auth>; rel="authorization_endpoint"',
+                        ),
+                        (
+                            "link",
+                            '<https://aaronparecki.com/token>; rel="token_endpoint"',
+                        ),
+                    ],
                 ),
-                ("link", '<https://aaronparecki.com/token>; rel="token_endpoint"'),
             ],
-            ("https://aaronparecki.com/auth", "https://aaronparecki.com/token"),
+            (
+                "https://aaronparecki.com/",
+                "https://aaronparecki.com/auth",
+                "https://aaronparecki.com/token",
+            ),
+            None,
         ),
         # HTML with those things in it
         (
-            """
+            [
+                MockRequest(
+                    status=200,
+                    url="https://aaronparecki.com",
+                    body="""
             <link rel="authorization_endpoint" href="https://aaronparecki.com/auth">
             <link rel="token_endpoint" href="https://aaronparecki.com/token">
             """,
-            [],
-            ("https://aaronparecki.com/auth", "https://aaronparecki.com/token"),
+                    headers=[],
+                ),
+            ],
+            (
+                "https://aaronparecki.com/",
+                "https://aaronparecki.com/auth",
+                "https://aaronparecki.com/token",
+            ),
+            None,
         ),
         # If headers has it, HTML is ignored
         (
-            '<link rel="authorization_endpoint" href="https://aaronparecki.com/auth2">',
             [
-                (
-                    "link",
-                    '<https://aaronparecki.com/auth>; rel="authorization_endpoint"',
+                MockRequest(
+                    status=200,
+                    url="https://aaronparecki.com",
+                    body='<link rel="authorization_endpoint" href="https://aaronparecki.com/auth2">',
+                    headers={
+                        "link": '<https://aaronparecki.com/auth>; rel="authorization_endpoint"'
+                    },
                 )
             ],
-            ("https://aaronparecki.com/auth", None),
+            ("https://aaronparecki.com/", "https://aaronparecki.com/auth", None),
+            None,
+        ),
+        # Now the ones that involve redirects - this one should error due to too many
+        (
+            [
+                MockRequest(
+                    status=301,
+                    url="https://aaronparecki.com",
+                    body="",
+                    headers={"location": "https://aaronparecki.com"},
+                )
+            ],
+            None,
+            utils.DiscoverEndpointsError,
+        ),
+        # This one follows permanent redirects to get /one for the canonical_url, but
+        # continues to follow through to /two where it discovers the authorization_endpoint
+        (
+            [
+                MockRequest(
+                    status=301,
+                    url="https://aaronparecki.com",
+                    body="",
+                    headers={"location": "/one"},
+                ),
+                MockRequest(
+                    status=302,
+                    url="https://aaronparecki.com/one",
+                    body="",
+                    headers={"location": "/two"},
+                ),
+                MockRequest(
+                    status=200,
+                    url="https://aaronparecki.com/two",
+                    body="",
+                    headers={
+                        "link": '<https://aaronparecki.com/auth>; rel="authorization_endpoint"'
+                    },
+                ),
+            ],
+            ("https://aaronparecki.com/one", "https://aaronparecki.com/auth", None),
+            None,
         ),
     ],
 )
-async def test_discover_endpoints(httpx_mock, body, headers, expected):
-    httpx_mock.add_response(
-        url="https://example.com", data=body.encode("utf-8"), headers=headers
-    )
-    actual = await utils.discover_endpoints("https://example.com/")
-    assert actual == expected
+async def test_discover_endpoints(httpx_mock, mocks, expected, expected_error):
+    for status, url, body, headers in mocks:
+        httpx_mock.add_response(
+            url=url, data=body.encode("utf-8"), headers=headers, status_code=status
+        )
+    if expected_error:
+        with pytest.raises(expected_error):
+            await utils.discover_endpoints("https://aaronparecki.com/")
+    else:
+        actual = await utils.discover_endpoints("https://aaronparecki.com/")
+        assert actual == expected
 
 
 @pytest.mark.parametrize(
@@ -229,3 +318,53 @@ def test_build_authorization_url():
 )
 def test_verify_same_domain(url, other_url, expected):
     assert utils.verify_same_domain(url, other_url) is expected
+
+
+class MockResponse:
+    def __init__(self, status, location):
+        self.status_code = status
+        self.location = location
+
+    @property
+    def headers(self):
+        return {"location": self.location}
+
+
+@pytest.mark.parametrize(
+    "start_url,responses,expected",
+    (
+        (
+            "http://metafilter.com/",
+            [
+                MockResponse(status=301, location="http://www.metafilter.com/"),
+                MockResponse(status=301, location="https://www.metafilter.com/"),
+            ],
+            "https://www.metafilter.com/",
+        ),
+        (
+            "http://metafilter.com/",
+            [
+                MockResponse(status=301, location="http://www.metafilter.com/"),
+                MockResponse(status=302, location="https://www.metafilter.com/"),
+            ],
+            "http://www.metafilter.com/",
+        ),
+        (
+            "http://metafilter.com/",
+            [
+                MockResponse(status=302, location="http://www.metafilter.com/"),
+                MockResponse(status=301, location="https://www.metafilter.com/"),
+            ],
+            "http://metafilter.com/",
+        ),
+        (
+            "http://metafilter.com/",
+            [
+                MockResponse(status=301, location="/two"),
+            ],
+            "http://metafilter.com/two",
+        ),
+    ),
+)
+def test_resolve_permanent_redirects(start_url, responses, expected):
+    assert expected == utils.resolve_permanent_redirects(start_url, responses)

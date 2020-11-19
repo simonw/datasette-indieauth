@@ -106,13 +106,41 @@ def parse_link_rels(html):
     return parser.link_rels
 
 
+def resolve_permanent_redirects(start_url, responses):
+    url = httpx.URL(start_url)
+    for response in responses:
+        if response.status_code in (301, 308):
+            location = httpx.URL(response.headers["location"])
+            if location.is_relative_url:
+                url = url.join(location)
+            else:
+                url = location
+        else:
+            break
+    return str(url)
+
+
+class DiscoverEndpointsError(Exception):
+    pass
+
+
 async def discover_endpoints(url):
+    "Returns canonical_url, authorization_endpoint, token_endpoint"
     authorization_endpoint = None
     token_endpoint = None
+    canonical_url = None
     chunk = None
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        # Check response.links first
+    async with httpx.AsyncClient(max_redirects=5) as client:
+        try:
+            response = await client.get(url)
+        except httpx.TooManyRedirects as e:
+            raise DiscoverEndpointsError(e)
+        # The canonical_url is found by following 301/308 redirects as far
+        # as possible. The authorization_endpoint may be found using content
+        # from a URL that follows additional 302/303/307 redirects.
+        canonical_url = resolve_permanent_redirects(response.url, response.history)
+
+        # Check response.links for Link: hedaers first
         if "authorization_endpoint" in response.links and response.links[
             "authorization_endpoint"
         ].get("url"):
@@ -122,7 +150,7 @@ async def discover_endpoints(url):
         ):
             token_endpoint = response.links["token_endpoint"]["url"]
         if authorization_endpoint and token_endpoint:
-            return authorization_endpoint, token_endpoint
+            return canonical_url, authorization_endpoint, token_endpoint
         chunk = response.text
     rels = parse_link_rels(chunk)
     if authorization_endpoint is None:
@@ -133,7 +161,7 @@ async def discover_endpoints(url):
         matches = [r["href"] for r in rels if r["rel"] == "token_endpoint"]
         if matches:
             token_endpoint = matches[0]
-    return authorization_endpoint, token_endpoint
+    return canonical_url, authorization_endpoint, token_endpoint
 
 
 def display_url(url):
