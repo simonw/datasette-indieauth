@@ -141,13 +141,23 @@ async def indieauth_done(request, datasette):
             )
         me = info["me"]
 
-        # Returned me must be on the same domain as original_me
+        # Verify returned me - must be same domain and link to same authorization_endpoint
+        me_error = None
         if not verify_same_domain(me, original_me):
+            me_error = '"me" value returned by authorization server had a domain that did not match the initial URL'
+
+        canonical_me, me_authorization_endpoint, _ = await utils.discover_endpoints(me)
+        if me_authorization_endpoint != authorization_endpoint:
+            me_error = '"me" value resolves to a different authorization_endpoint'
+
+        if me_error:
             return await indieauth_page(
                 request,
                 datasette,
-                error='"me" value returned by authorization server had a domain that did not match the initial URL',
+                error=me_error,
             )
+
+        me = canonical_me
 
         actor = {
             "me": me,

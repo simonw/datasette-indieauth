@@ -153,15 +153,23 @@ async def test_indieauth_flow(
         data=auth_response_body.encode("utf-8"),
         status_code=auth_response_status,
     )
+    if not expected_error:
+        httpx_mock.add_response(
+            url="https://indieauth.simonwillison.net/index.php/author/simonw/",
+            method="GET",
+            data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
+        )
+    if "indieauth.simonwillison.com" in auth_response_body:
+        httpx_mock.add_response(
+            url="https://indieauth.simonwillison.com",
+            method="GET",
+            data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
+        )
     datasette = Datasette([], memory=True)
     app = datasette.app()
     async with httpx.AsyncClient(app=app) as client:
         # Get CSRF token
-        csrftoken = (
-            await client.get(
-                "http://localhost/-/indieauth",
-            )
-        ).cookies["ds_csrftoken"]
+        csrftoken = await _get_csrftoken(client)
         # Submit the form
         post_response = await client.post(
             "http://localhost/-/indieauth",
@@ -196,8 +204,12 @@ async def test_indieauth_flow(
             allow_redirects=False,
         )
         # This should have made a POST to https://indieauth.simonwillison.net/auth
-        last_request = httpx_mock.get_requests()[-1]
-        post_bits = dict(urllib.parse.parse_qsl(last_request.read().decode("utf-8")))
+        last_post_request = [
+            r for r in httpx_mock.get_requests() if r.method == "POST"
+        ][-1]
+        post_bits = dict(
+            urllib.parse.parse_qsl(last_post_request.read().decode("utf-8"))
+        )
         assert post_bits == {
             "grant_type": "authorization_code",
             "code": "123",
@@ -262,11 +274,7 @@ async def test_indieauth_errors(httpx_mock, me, bodies, expected_error):
     datasette = Datasette([], memory=True)
     app = datasette.app()
     async with httpx.AsyncClient(app=app) as client:
-        csrftoken = (
-            await client.get(
-                "http://localhost/-/indieauth",
-            )
-        ).cookies["ds_csrftoken"]
+        csrftoken = await _get_csrftoken(client)
         # Submit the form
         post_response = await client.post(
             "http://localhost/-/indieauth",
@@ -314,11 +322,7 @@ async def test_invalid_url(httpx_mock):
     datasette = Datasette([], memory=True)
     app = datasette.app()
     async with httpx.AsyncClient(app=app) as client:
-        csrftoken = (
-            await client.get(
-                "http://localhost/-/indieauth",
-            )
-        ).cookies["ds_csrftoken"]
+        csrftoken = await _get_csrftoken(client)
         # Submit the form
         post_response = await client.post(
             "http://localhost/-/indieauth",
@@ -327,3 +331,59 @@ async def test_invalid_url(httpx_mock):
             allow_redirects=False,
         )
     assert "Invalid IndieAuth identifier: HTTP error occurred" in post_response.text
+
+
+@pytest.mark.asyncio
+async def test_non_matching_authorization_endpoint(httpx_mock):
+    # See https://github.com/simonw/datasette-indieauth/issues/22
+    httpx_mock.add_response(
+        url="https://simonwillison.net",
+        data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
+    )
+    httpx_mock.add_response(
+        url="https://indieauth.simonwillison.net/auth",
+        method="POST",
+        data="me=https%3A%2F%2Fsimonwillison.net%2Fme".encode("utf-8"),
+    )
+    httpx_mock.add_response(
+        url="https://simonwillison.net/me",
+        data=b'<link rel="authorization_endpoint" href="https://example.com">',
+    )
+    datasette = Datasette([], memory=True)
+    app = datasette.app()
+    async with httpx.AsyncClient(app=app) as client:
+        csrftoken = await _get_csrftoken(client)
+        # Submit the form
+        post_response = await client.post(
+            "http://localhost/-/indieauth",
+            data={"csrftoken": csrftoken, "me": "https://simonwillison.net/"},
+            cookies={"ds_csrftoken": csrftoken},
+            allow_redirects=False,
+        )
+        ds_indieauth = post_response.cookies["ds_indieauth"]
+        state = dict(
+            urllib.parse.parse_qsl(post_response.headers["location"].split("?", 1)[1])
+        )["state"]
+        # ... after redirecting back again
+        response = await client.get(
+            "http://localhost/-/indieauth/done",
+            params={
+                "state": state,
+                "code": "123",
+            },
+            cookies={"ds_indieauth": ds_indieauth},
+            allow_redirects=False,
+        )
+        # This should be an error because the authorization_endpoint did not match
+        assert (
+            "&#34;me&#34; value resolves to a different authorization_endpoint"
+            in response.text
+        )
+
+
+async def _get_csrftoken(client):
+    return (
+        await client.get(
+            "http://localhost/-/indieauth",
+        )
+    ).cookies["ds_csrftoken"]
