@@ -34,5 +34,5 @@ setup(
     },
     tests_require=["datasette-indieauth[test]"],
     package_data={"datasette_indieauth": ["templates/*.html"]},
-    python_requires=">=3.6",
+    python_requires=">=3.7",
 )
