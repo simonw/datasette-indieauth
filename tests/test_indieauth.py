@@ -175,7 +175,6 @@ async def test_indieauth_flow(
             "http://localhost/-/indieauth",
             data={"csrftoken": csrftoken, "me": me},
             cookies={"ds_csrftoken": csrftoken},
-            allow_redirects=False,
         )
         # Should set a cookie and redirect
         assert post_response.status_code == 302
@@ -201,7 +200,6 @@ async def test_indieauth_flow(
                 "code": "123",
             },
             cookies={"ds_indieauth": ds_indieauth},
-            allow_redirects=False,
         )
         # This should have made a POST to https://indieauth.simonwillison.net/auth
         last_post_request = [
@@ -280,7 +278,6 @@ async def test_indieauth_errors(httpx_mock, me, bodies, expected_error):
             "http://localhost/-/indieauth",
             data={"csrftoken": csrftoken, "me": me},
             cookies={"ds_csrftoken": csrftoken},
-            allow_redirects=False,
         )
         assert (
             '<p class="message-error">{}'.format(expected_error) in post_response.text
@@ -307,7 +304,6 @@ async def test_invalid_ds_indieauth_cookie(bad_cookie):
                 "code": "123",
             },
             cookies={"ds_indieauth": ds_indieauth},
-            allow_redirects=False,
         )
     assert '<p class="message-error">Invalid ds_indieauth cookie' in response.text
 
@@ -328,7 +324,6 @@ async def test_invalid_url(httpx_mock):
             "http://localhost/-/indieauth",
             data={"csrftoken": csrftoken, "me": "invalid"},
             cookies={"ds_csrftoken": csrftoken},
-            allow_redirects=False,
         )
     assert "Invalid IndieAuth identifier: HTTP error occurred" in post_response.text
 
@@ -358,7 +353,6 @@ async def test_non_matching_authorization_endpoint(httpx_mock):
             "http://localhost/-/indieauth",
             data={"csrftoken": csrftoken, "me": "https://simonwillison.net/"},
             cookies={"ds_csrftoken": csrftoken},
-            allow_redirects=False,
         )
         ds_indieauth = post_response.cookies["ds_indieauth"]
         state = dict(
@@ -372,7 +366,6 @@ async def test_non_matching_authorization_endpoint(httpx_mock):
                 "code": "123",
             },
             cookies={"ds_indieauth": ds_indieauth},
-            allow_redirects=False,
         )
         # This should be an error because the authorization_endpoint did not match
         assert (
