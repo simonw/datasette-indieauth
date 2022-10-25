@@ -9,7 +9,7 @@ from .utils import (
 )
 import httpx
 import itsdangerous
-from jinja2 import escape
+from markupsafe import escape
 import json
 import urllib
 
