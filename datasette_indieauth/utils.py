@@ -140,7 +140,7 @@ async def discover_endpoints(url):
         # from a URL that follows additional 302/303/307 redirects.
         canonical_url = resolve_permanent_redirects(response.url, response.history)
 
-        # Check response.links for Link: hedaers first
+        # Check response.links for Link: headers first
         if "authorization_endpoint" in response.links and response.links[
             "authorization_endpoint"
         ].get("url"):

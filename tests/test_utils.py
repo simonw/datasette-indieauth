@@ -252,9 +252,7 @@ MockRequest = namedtuple("MockRequest", ("status", "url", "body", "headers"))
 )
 async def test_discover_endpoints(httpx_mock, mocks, expected, expected_error):
     for status, url, body, headers in mocks:
-        httpx_mock.add_response(
-            url=url, text=body, headers=headers, status_code=status
-        )
+        httpx_mock.add_response(url=url, text=body, headers=headers, status_code=status)
     if expected_error:
         with pytest.raises(expected_error):
             actual = await utils.discover_endpoints("https://aaronparecki.com/")

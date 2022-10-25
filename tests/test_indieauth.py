@@ -33,7 +33,7 @@ async def test_restrict_access():
         },
     )
     app = datasette.app()
-    paths = ("/-/actor.json", "/", "/:memory:", "/-/metadata")
+    paths = ("/-/actor.json", "/", "/_memory", "/-/metadata")
     async with httpx.AsyncClient(app=app) as client:
         # All pages should 403 and show login form
         for path in paths:
@@ -144,26 +144,26 @@ async def test_indieauth_flow(
     expected_error,
 ):
     httpx_mock.add_response(
-        url=me.rstrip("/"),
-        data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
+        url=me,
+        text='<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
     )
     httpx_mock.add_response(
         url="https://indieauth.simonwillison.net/auth",
         method="POST",
-        data=auth_response_body.encode("utf-8"),
+        text=auth_response_body,
         status_code=auth_response_status,
     )
     if not expected_error:
         httpx_mock.add_response(
             url="https://indieauth.simonwillison.net/index.php/author/simonw/",
             method="GET",
-            data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
+            text='<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
         )
     if "indieauth.simonwillison.com" in auth_response_body:
         httpx_mock.add_response(
-            url="https://indieauth.simonwillison.com",
+            url="https://indieauth.simonwillison.com/",
             method="GET",
-            data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
+            text='<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
         )
     datasette = Datasette([], memory=True)
     app = datasette.app()
@@ -251,7 +251,7 @@ async def test_indieauth_done_no_params_error():
         (
             "https://simonwillison.net/",
             {
-                "https://simonwillison.net": "No link here",
+                "https://simonwillison.net/": "No link here",
                 # "https://indieauth.simonwillison.net/auth": "me=https%3A%2F%2Findieauth.simonwillison.net%2Findex.php%2Fauthor%2Fsimonw%2F&scope",
             },
             "Invalid IndieAuth identifier - no authorization_endpoint found",
@@ -267,7 +267,7 @@ async def test_indieauth_errors(httpx_mock, me, bodies, expected_error):
     for url, body in bodies.items():
         httpx_mock.add_response(
             url=url,
-            data=body.encode("utf-8"),
+            text=body,
         )
     datasette = Datasette([], memory=True)
     app = datasette.app()
@@ -310,10 +310,10 @@ async def test_invalid_ds_indieauth_cookie(bad_cookie):
 
 @pytest.mark.asyncio
 async def test_invalid_url(httpx_mock):
-    def raise_timeout(request, ext):
+    def raise_timeout(request):
         raise httpx.ReadTimeout(f"HTTP error occurred", request=request)
 
-    httpx_mock.add_callback(raise_timeout, url="http://invalid")
+    httpx_mock.add_callback(raise_timeout, url="http://invalid/")
 
     datasette = Datasette([], memory=True)
     app = datasette.app()
@@ -332,17 +332,17 @@ async def test_invalid_url(httpx_mock):
 async def test_non_matching_authorization_endpoint(httpx_mock):
     # See https://github.com/simonw/datasette-indieauth/issues/22
     httpx_mock.add_response(
-        url="https://simonwillison.net",
-        data=b'<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
+        url="https://simonwillison.net/",
+        text='<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
     )
     httpx_mock.add_response(
         url="https://indieauth.simonwillison.net/auth",
         method="POST",
-        data="me=https%3A%2F%2Fsimonwillison.net%2Fme".encode("utf-8"),
+        text="me=https%3A%2F%2Fsimonwillison.net%2Fme",
     )
     httpx_mock.add_response(
         url="https://simonwillison.net/me",
-        data=b'<link rel="authorization_endpoint" href="https://example.com">',
+        text='<link rel="authorization_endpoint" href="https://example.com">',
     )
     datasette = Datasette([], memory=True)
     app = datasette.app()
