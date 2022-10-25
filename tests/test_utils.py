@@ -1,6 +1,4 @@
-import base64
 from collections import namedtuple
-from datasette_indieauth.utils import resolve_permanent_redirects
 import hashlib
 import pytest
 from urllib.parse import parse_qsl
@@ -138,7 +136,7 @@ MockRequest = namedtuple("MockRequest", ("status", "url", "body", "headers"))
             [
                 MockRequest(
                     status=200,
-                    url="https://aaronparecki.com",
+                    url="https://aaronparecki.com/",
                     body="",
                     headers={
                         "link": '<https://aaronparecki.com/auth>; rel="authorization_endpoint"'
@@ -153,7 +151,7 @@ MockRequest = namedtuple("MockRequest", ("status", "url", "body", "headers"))
             [
                 MockRequest(
                     status=200,
-                    url="https://aaronparecki.com",
+                    url="https://aaronparecki.com/",
                     body="link",
                     headers=[
                         (
@@ -179,7 +177,7 @@ MockRequest = namedtuple("MockRequest", ("status", "url", "body", "headers"))
             [
                 MockRequest(
                     status=200,
-                    url="https://aaronparecki.com",
+                    url="https://aaronparecki.com/",
                     body="""
             <link rel="authorization_endpoint" href="https://aaronparecki.com/auth">
             <link rel="token_endpoint" href="https://aaronparecki.com/token">
@@ -199,7 +197,7 @@ MockRequest = namedtuple("MockRequest", ("status", "url", "body", "headers"))
             [
                 MockRequest(
                     status=200,
-                    url="https://aaronparecki.com",
+                    url="https://aaronparecki.com/",
                     body='<link rel="authorization_endpoint" href="https://aaronparecki.com/auth2">',
                     headers={
                         "link": '<https://aaronparecki.com/auth>; rel="authorization_endpoint"'
@@ -214,9 +212,9 @@ MockRequest = namedtuple("MockRequest", ("status", "url", "body", "headers"))
             [
                 MockRequest(
                     status=301,
-                    url="https://aaronparecki.com",
+                    url="https://aaronparecki.com/",
                     body="",
-                    headers={"location": "https://aaronparecki.com"},
+                    headers={"location": "https://aaronparecki.com/"},
                 )
             ],
             None,
@@ -228,7 +226,7 @@ MockRequest = namedtuple("MockRequest", ("status", "url", "body", "headers"))
             [
                 MockRequest(
                     status=301,
-                    url="https://aaronparecki.com",
+                    url="https://aaronparecki.com/",
                     body="",
                     headers={"location": "/one"},
                 ),
@@ -255,11 +253,11 @@ MockRequest = namedtuple("MockRequest", ("status", "url", "body", "headers"))
 async def test_discover_endpoints(httpx_mock, mocks, expected, expected_error):
     for status, url, body, headers in mocks:
         httpx_mock.add_response(
-            url=url, data=body.encode("utf-8"), headers=headers, status_code=status
+            url=url, text=body, headers=headers, status_code=status
         )
     if expected_error:
         with pytest.raises(expected_error):
-            await utils.discover_endpoints("https://aaronparecki.com/")
+            actual = await utils.discover_endpoints("https://aaronparecki.com/")
     else:
         actual = await utils.discover_endpoints("https://aaronparecki.com/")
         assert actual == expected

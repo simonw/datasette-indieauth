@@ -132,7 +132,7 @@ async def discover_endpoints(url):
     chunk = None
     async with httpx.AsyncClient(max_redirects=5) as client:
         try:
-            response = await client.get(url)
+            response = await client.get(url, follow_redirects=True)
         except httpx.TooManyRedirects as e:
             raise DiscoverEndpointsError(e)
         # The canonical_url is found by following 301/308 redirects as far
