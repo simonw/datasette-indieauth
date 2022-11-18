@@ -217,9 +217,7 @@ async def test_indieauth_flow(
             "indieauth_scope": "email",
         }
         expected_actor.update(expected_profile)
-        assert ds.unsign(response.cookies["ds_actor"], "actor") == {
-            "a": expected_actor
-        }
+        assert ds.unsign(response.cookies["ds_actor"], "actor") == {"a": expected_actor}
 
 
 @pytest.mark.asyncio
@@ -352,3 +350,10 @@ async def test_non_matching_authorization_endpoint(httpx_mock):
 
 async def _get_csrftoken(ds):
     return (await ds.client.get("/-/indieauth")).cookies["ds_csrftoken"]
+
+
+@pytest.mark.asyncio
+async def test_menu():
+    ds = Datasette()
+    index = await ds.client.get("/")
+    assert '<li><a href="/-/indieauth">Sign in IndieAuth</a></li>' in index.text
