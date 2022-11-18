@@ -13,17 +13,16 @@ def non_mocked_hosts():
 
 @pytest.mark.asyncio
 async def test_plugin_is_installed():
-    app = Datasette([], memory=True).app()
-    async with httpx.AsyncClient(app=app) as client:
-        response = await client.get("http://localhost/-/plugins.json")
-        assert 200 == response.status_code
-        installed_plugins = {p["name"] for p in response.json()}
-        assert "datasette-indieauth" in installed_plugins
+    ds = Datasette([], memory=True)
+    response = await ds.client.get("/-/plugins.json")
+    assert response.status_code == 200
+    installed_plugins = {p["name"] for p in response.json()}
+    assert "datasette-indieauth" in installed_plugins
 
 
 @pytest.mark.asyncio
 async def test_restrict_access():
-    datasette = Datasette(
+    ds = Datasette(
         [],
         memory=True,
         metadata={
@@ -32,35 +31,30 @@ async def test_restrict_access():
             }
         },
     )
-    app = datasette.app()
     paths = ("/-/actor.json", "/", "/_memory", "/-/metadata")
-    async with httpx.AsyncClient(app=app) as client:
-        # All pages should 403 and show login form
-        for path in paths:
-            response = await client.get("http://localhost{}".format(path))
-            assert response.status_code == 403
-            assert '<form action="/-/indieauth" method="post">' in response.text
-            assert "simonwillison.net" not in response.text
+    # All pages should 403 and show login form
+    for path in paths:
+        response = await ds.client.get(path)
+        assert response.status_code == 403
+        assert '<form action="/-/indieauth" method="post">' in response.text
+        assert "simonwillison.net" not in response.text
 
-        # Now try with a signed ds_actor cookie - everything should 200
-        cookies = {
-            "ds_actor": datasette.sign(
-                {
-                    "a": {
-                        "me": "https://simonwillison.net/",
-                        "display": "simonwillison.net",
-                    }
-                },
-                "actor",
-            )
-        }
-        for path in paths:
-            response2 = await client.get(
-                "http://localhost{}".format(path),
-                cookies=cookies,
-            )
-            assert response2.status_code == 200
-            assert "simonwillison.net" in response2.text
+    # Now try with a signed ds_actor cookie - everything should 200
+    cookies = {
+        "ds_actor": ds.sign(
+            {
+                "a": {
+                    "me": "https://simonwillison.net/",
+                    "display": "simonwillison.net",
+                }
+            },
+            "actor",
+        )
+    }
+    for path in paths:
+        response2 = await ds.client.get(path, cookies=cookies)
+        assert response2.status_code == 200
+        assert "simonwillison.net" in response2.text
 
 
 @pytest.mark.asyncio
@@ -69,12 +63,12 @@ async def test_h_app(title):
     metadata = {}
     if title:
         metadata["title"] = title
-    datasette = Datasette(
+    ds = Datasette(
         [],
         memory=True,
         metadata=metadata,
     )
-    response = await datasette.client.get("/-/indieauth")
+    response = await ds.client.get("/-/indieauth")
     html = response.text
     items = mf2py.parse(doc=html)["items"]
     expected_title = title or "Datasette"
@@ -165,83 +159,75 @@ async def test_indieauth_flow(
             method="GET",
             text='<link rel="authorization_endpoint" href="https://indieauth.simonwillison.net/auth">',
         )
-    datasette = Datasette([], memory=True)
-    app = datasette.app()
-    async with httpx.AsyncClient(app=app) as client:
-        # Get CSRF token
-        csrftoken = await _get_csrftoken(client)
-        # Submit the form
-        post_response = await client.post(
-            "http://localhost/-/indieauth",
-            data={"csrftoken": csrftoken, "me": me},
-            cookies={"ds_csrftoken": csrftoken},
-        )
-        # Should set a cookie and redirect
-        assert post_response.status_code == 302
-        assert "ds_indieauth" in post_response.cookies
-        ds_indieauth = post_response.cookies["ds_indieauth"]
-        ds_indieauth_bits = datasette.unsign(ds_indieauth, "datasette-indieauth-cookie")
-        verifier = ds_indieauth_bits["v"]
-        assert ds_indieauth_bits["m"] == me
-        # Verify the location is in the right shape
-        location = post_response.headers["location"]
-        assert location.startswith("https://indieauth.simonwillison.net/auth?")
-        querystring = location.split("?", 1)[1]
-        bits = dict(urllib.parse.parse_qsl(querystring))
-        assert bits["redirect_uri"] == "http://localhost/-/indieauth/done"
-        assert bits["client_id"] == "http://localhost/-/indieauth"
-        assert bits["me"] == me
-        # Next step for user is to redirect to that page, login and redirect back
-        # Simulate the redirect-back part
-        response = await client.get(
-            "http://localhost/-/indieauth/done",
-            params={
-                "state": bits["state"],
-                "code": "123",
-            },
-            cookies={"ds_indieauth": ds_indieauth},
-        )
-        # This should have made a POST to https://indieauth.simonwillison.net/auth
-        last_post_request = [
-            r for r in httpx_mock.get_requests() if r.method == "POST"
-        ][-1]
-        post_bits = dict(
-            urllib.parse.parse_qsl(last_post_request.read().decode("utf-8"))
-        )
-        assert post_bits == {
-            "grant_type": "authorization_code",
+    ds = Datasette([], memory=True)
+    # Get CSRF token
+    csrftoken = await _get_csrftoken(ds)
+    # Submit the form
+    post_response = await ds.client.post(
+        "/-/indieauth",
+        data={"csrftoken": csrftoken, "me": me},
+        cookies={"ds_csrftoken": csrftoken},
+    )
+    # Should set a cookie and redirect
+    assert post_response.status_code == 302
+    assert "ds_indieauth" in post_response.cookies
+    ds_indieauth = post_response.cookies["ds_indieauth"]
+    ds_indieauth_bits = ds.unsign(ds_indieauth, "datasette-indieauth-cookie")
+    verifier = ds_indieauth_bits["v"]
+    assert ds_indieauth_bits["m"] == me
+    # Verify the location is in the right shape
+    location = post_response.headers["location"]
+    assert location.startswith("https://indieauth.simonwillison.net/auth?")
+    querystring = location.split("?", 1)[1]
+    bits = dict(urllib.parse.parse_qsl(querystring))
+    assert bits["redirect_uri"] == "http://localhost/-/indieauth/done"
+    assert bits["client_id"] == "http://localhost/-/indieauth"
+    assert bits["me"] == me
+    # Next step for user is to redirect to that page, login and redirect back
+    # Simulate the redirect-back part
+    response = await ds.client.get(
+        "/-/indieauth/done",
+        params={
+            "state": bits["state"],
             "code": "123",
-            "client_id": "http://localhost/-/indieauth",
-            "redirect_uri": "http://localhost/-/indieauth/done",
-            "code_verifier": verifier,
+        },
+        cookies={"ds_indieauth": ds_indieauth},
+    )
+    # This should have made a POST to https://indieauth.simonwillison.net/auth
+    last_post_request = [r for r in httpx_mock.get_requests() if r.method == "POST"][-1]
+    post_bits = dict(urllib.parse.parse_qsl(last_post_request.read().decode("utf-8")))
+    assert post_bits == {
+        "grant_type": "authorization_code",
+        "code": "123",
+        "client_id": "http://localhost/-/indieauth",
+        "redirect_uri": "http://localhost/-/indieauth/done",
+        "code_verifier": verifier,
+    }
+    # Should set cookie for "https://indieauth.simonwillison.net/index.php/author/simonw/"
+    if expected_error:
+        assert response.status_code == 200
+        assert expected_error in response.text
+    else:
+        assert response.status_code == 302
+        assert response.headers["location"]
+        assert "ds_actor" in response.cookies
+        expected_actor = {
+            "me": "https://indieauth.simonwillison.net/index.php/author/simonw/",
+            "display": "indieauth.simonwillison.net/index.php/author/simonw/",
+            "indieauth_scope": "email",
         }
-        # Should set cookie for "https://indieauth.simonwillison.net/index.php/author/simonw/"
-        if expected_error:
-            assert response.status_code == 200
-            assert expected_error in response.text
-        else:
-            assert response.status_code == 302
-            assert response.headers["location"]
-            assert "ds_actor" in response.cookies
-            expected_actor = {
-                "me": "https://indieauth.simonwillison.net/index.php/author/simonw/",
-                "display": "indieauth.simonwillison.net/index.php/author/simonw/",
-                "indieauth_scope": "email",
-            }
-            expected_actor.update(expected_profile)
-            assert datasette.unsign(response.cookies["ds_actor"], "actor") == {
-                "a": expected_actor
-            }
+        expected_actor.update(expected_profile)
+        assert ds.unsign(response.cookies["ds_actor"], "actor") == {
+            "a": expected_actor
+        }
 
 
 @pytest.mark.asyncio
 async def test_indieauth_done_no_params_error():
-    datasette = Datasette([], memory=True)
-    app = datasette.app()
-    async with httpx.AsyncClient(app=app) as client:
-        response = await client.get("http://localhost/-/indieauth/done")
-        assert response.status_code == 400
-        assert "Invalid state" in response.text
+    ds = Datasette([], memory=True)
+    response = await ds.client.get("/-/indieauth/done")
+    assert response.status_code == 400
+    assert "Invalid state" in response.text
 
 
 @pytest.mark.asyncio
@@ -269,19 +255,15 @@ async def test_indieauth_errors(httpx_mock, me, bodies, expected_error):
             url=url,
             text=body,
         )
-    datasette = Datasette([], memory=True)
-    app = datasette.app()
-    async with httpx.AsyncClient(app=app) as client:
-        csrftoken = await _get_csrftoken(client)
-        # Submit the form
-        post_response = await client.post(
-            "http://localhost/-/indieauth",
-            data={"csrftoken": csrftoken, "me": me},
-            cookies={"ds_csrftoken": csrftoken},
-        )
-        assert (
-            '<p class="message-error">{}'.format(expected_error) in post_response.text
-        )
+    ds = Datasette([], memory=True)
+    csrftoken = await _get_csrftoken(ds)
+    # Submit the form
+    post_response = await ds.client.post(
+        "/-/indieauth",
+        data={"csrftoken": csrftoken, "me": me},
+        cookies={"ds_csrftoken": csrftoken},
+    )
+    assert '<p class="message-error">{}'.format(expected_error) in post_response.text
 
 
 @pytest.mark.asyncio
@@ -289,22 +271,20 @@ async def test_indieauth_errors(httpx_mock, me, bodies, expected_error):
     "bad_cookie", ["this-is-bad", {"v": "blah"}, {"m": "blah"}, {"s": "blah"}]
 )
 async def test_invalid_ds_indieauth_cookie(bad_cookie):
-    datasette = Datasette([], memory=True)
-    app = datasette.app()
-    state = datasette.sign({"a": "auth-url"}, "datasette-indieauth-state")
+    ds = Datasette([], memory=True)
+    state = ds.sign({"a": "auth-url"}, "datasette-indieauth-state")
     if isinstance(bad_cookie, dict):
-        ds_indieauth = datasette.sign(bad_cookie, "datasette-indieauth-cookie")
+        ds_indieauth = ds.sign(bad_cookie, "datasette-indieauth-cookie")
     else:
         ds_indieauth = bad_cookie
-    async with httpx.AsyncClient(app=app) as client:
-        response = await client.get(
-            "http://localhost/-/indieauth/done",
-            params={
-                "state": state,
-                "code": "123",
-            },
-            cookies={"ds_indieauth": ds_indieauth},
-        )
+    response = await ds.client.get(
+        "/-/indieauth/done",
+        params={
+            "state": state,
+            "code": "123",
+        },
+        cookies={"ds_indieauth": ds_indieauth},
+    )
     assert '<p class="message-error">Invalid ds_indieauth cookie' in response.text
 
 
@@ -315,16 +295,14 @@ async def test_invalid_url(httpx_mock):
 
     httpx_mock.add_callback(raise_timeout, url="http://invalid/")
 
-    datasette = Datasette([], memory=True)
-    app = datasette.app()
-    async with httpx.AsyncClient(app=app) as client:
-        csrftoken = await _get_csrftoken(client)
-        # Submit the form
-        post_response = await client.post(
-            "http://localhost/-/indieauth",
-            data={"csrftoken": csrftoken, "me": "invalid"},
-            cookies={"ds_csrftoken": csrftoken},
-        )
+    ds = Datasette([], memory=True)
+    csrftoken = await _get_csrftoken(ds)
+    # Submit the form
+    post_response = await ds.client.post(
+        "/-/indieauth",
+        data={"csrftoken": csrftoken, "me": "invalid"},
+        cookies={"ds_csrftoken": csrftoken},
+    )
     assert "Invalid IndieAuth identifier: HTTP error occurred" in post_response.text
 
 
@@ -344,39 +322,33 @@ async def test_non_matching_authorization_endpoint(httpx_mock):
         url="https://simonwillison.net/me",
         text='<link rel="authorization_endpoint" href="https://example.com">',
     )
-    datasette = Datasette([], memory=True)
-    app = datasette.app()
-    async with httpx.AsyncClient(app=app) as client:
-        csrftoken = await _get_csrftoken(client)
-        # Submit the form
-        post_response = await client.post(
-            "http://localhost/-/indieauth",
-            data={"csrftoken": csrftoken, "me": "https://simonwillison.net/"},
-            cookies={"ds_csrftoken": csrftoken},
-        )
-        ds_indieauth = post_response.cookies["ds_indieauth"]
-        state = dict(
-            urllib.parse.parse_qsl(post_response.headers["location"].split("?", 1)[1])
-        )["state"]
-        # ... after redirecting back again
-        response = await client.get(
-            "http://localhost/-/indieauth/done",
-            params={
-                "state": state,
-                "code": "123",
-            },
-            cookies={"ds_indieauth": ds_indieauth},
-        )
-        # This should be an error because the authorization_endpoint did not match
-        assert (
-            "&#34;me&#34; value resolves to a different authorization_endpoint"
-            in response.text
-        )
+    ds = Datasette([], memory=True)
+    csrftoken = await _get_csrftoken(ds)
+    # Submit the form
+    post_response = await ds.client.post(
+        "/-/indieauth",
+        data={"csrftoken": csrftoken, "me": "https://simonwillison.net/"},
+        cookies={"ds_csrftoken": csrftoken},
+    )
+    ds_indieauth = post_response.cookies["ds_indieauth"]
+    state = dict(
+        urllib.parse.parse_qsl(post_response.headers["location"].split("?", 1)[1])
+    )["state"]
+    # ... after redirecting back again
+    response = await ds.client.get(
+        "/-/indieauth/done",
+        params={
+            "state": state,
+            "code": "123",
+        },
+        cookies={"ds_indieauth": ds_indieauth},
+    )
+    # This should be an error because the authorization_endpoint did not match
+    assert (
+        "&#34;me&#34; value resolves to a different authorization_endpoint"
+        in response.text
+    )
 
 
-async def _get_csrftoken(client):
-    return (
-        await client.get(
-            "http://localhost/-/indieauth",
-        )
-    ).cookies["ds_csrftoken"]
+async def _get_csrftoken(ds):
+    return (await ds.client.get("/-/indieauth")).cookies["ds_csrftoken"]
